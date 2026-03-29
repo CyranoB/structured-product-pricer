@@ -294,7 +294,7 @@ tr:hover { background: var(--teal-light); }
 .matrix-table { font-family: var(--font-mono); font-size: 11px; border-collapse: collapse; }
 .matrix-table td { padding: 4px 6px; text-align: right; min-width: 52px; }
 .matrix-table th { padding: 4px 6px; font-size: 10px; }
-.matrix-eq { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+/* matrix-eq removed: matrices now stacked vertically */
 .matrix-label {
   font-family: var(--font-serif);
   font-weight: 400;
@@ -455,22 +455,18 @@ tr:hover { background: var(--teal-light); }
     <p style="font-size:13px;color:var(--text-secondary);margin-bottom:12px;">
       Pour simuler des rendements corrélés, on décompose la matrice de corrélation C = LL<sup>T</sup>. La matrice L (triangulaire inférieure) transforme des variables aléatoires indépendantes Z en variables corrélées : Z<sub>corr</sub> = L × Z.
     </p>
-    <div class="matrix-eq">
-      <div>
-        <div class="matrix-label">Matrice de corrélation C</div>
-        <div class="matrix-display" id="corr-matrix-display"></div>
-      </div>
-      <div style="font-size:24px;font-weight:bold;padding:20px 0;">=</div>
-      <div>
-        <div class="matrix-label">L (Cholesky)</div>
-        <div class="matrix-display" id="cholesky-matrix-display"></div>
-      </div>
-      <div style="font-size:24px;font-weight:bold;padding:20px 0;">×</div>
-      <div>
-        <div class="matrix-label">L<sup>T</sup></div>
-        <div style="font-size:12px;color:var(--text-secondary);text-align:center;">(transposée de L)</div>
-      </div>
+    <div class="formula-box" style="margin-bottom:24px;">
+      <span style="font-family:var(--font-serif);font-size:16px;color:var(--charcoal);">C</span>
+      <span style="margin:0 8px;">=</span>
+      <span style="font-family:var(--font-serif);font-size:16px;color:var(--charcoal);">L</span>
+      <span style="margin:0 4px;">·</span>
+      <span style="font-family:var(--font-serif);font-size:16px;color:var(--charcoal);">L</span><sup style="font-size:11px;">T</sup>
     </div>
+    <h3>Matrice de corrélation C</h3>
+    <div class="matrix-display" id="corr-matrix-display"></div>
+    <h3 style="margin-top:28px;">Matrice L (facteur de Cholesky, triangulaire inférieure)</h3>
+    <p style="font-size:12px;color:var(--text-secondary);margin-bottom:8px;">Les cellules vides correspondent aux éléments nuls de la matrice triangulaire supérieure.</p>
+    <div class="matrix-display" id="cholesky-matrix-display"></div>
   </div>
 
   <div class="card">

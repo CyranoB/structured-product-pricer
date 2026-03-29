@@ -529,6 +529,27 @@ tr:hover { background: var(--teal-light); }
       <h3 style="margin-top:28px;">Matrice L (facteur de Cholesky, triangulaire inférieure)</h3>
       <p style="font-size:12px;color:var(--text-secondary);margin-bottom:8px;">Les cellules vides correspondent aux éléments nuls de la matrice triangulaire supérieure.</p>
       <div class="matrix-display" id="cholesky-matrix-display"></div>
+
+      <h3 style="margin-top:28px;">Démo : Z indépendant → Z corrélé</h3>
+      <p style="font-size:12px;color:var(--text-secondary);margin-bottom:12px;">
+        On génère 10 variables normales indépendantes Z, puis on les multiplie par L pour obtenir des variables corrélées. Cliquer pour regénérer.
+      </p>
+      <div style="display:grid;grid-template-columns:1fr auto 1fr;gap:16px;align-items:start;">
+        <div>
+          <div class="matrix-label">Z indépendant</div>
+          <table class="matrix-table" id="z-indep-table"></table>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding-top:24px;">
+          <span style="font-family:var(--font-serif);font-size:14px;">× L =</span>
+        </div>
+        <div>
+          <div class="matrix-label">Z corrélé</div>
+          <table class="matrix-table" id="z-corr-table"></table>
+        </div>
+      </div>
+      <button onclick="demoZCorrelation()" style="margin-top:12px;padding:6px 16px;border:1px solid var(--teal);color:var(--teal);background:none;border-radius:2px;cursor:pointer;font-size:12px;">
+        Regénérer Z
+      </button>
     </div>
   </div>
 
@@ -545,7 +566,7 @@ tr:hover { background: var(--teal-light); }
       </div>
     </div>
     <div class="card" style="margin-top:20px;">
-      <h2>Scénarios simulés – Prix finaux par titre</h2>
+      <h2>Distribution des prix finaux simulés (S<sub>T</sub>)</h2>
       <div class="chart-controls">
         <select id="mc-stock-select" onchange="mc_drawEndpoints()" style="padding:6px 12px;border-radius:6px;border:1px solid var(--border);font-size:13px;"></select>
       </div>
@@ -649,7 +670,7 @@ function initTab0() {
     ['Instrument', p.name],
     ['CUSIP', p.cusip],
     ['Durée', p.term_years + ' ans'],
-    ['Date d\'émission', fmtDateFr(p.trade_date)],
+    ['Date d\'émission', fmtDateFr(p.issue_date)],
     ['Échéance', fmtDateFr(p.maturity_date)],
     ['Dénomination', fmtMoney(p.denomination)],
     ['Coupon numérique', fmtPct(p.digital_coupon)],
@@ -741,18 +762,20 @@ function updatePayoffSlider() {
 // SECTION 5: TAB 1 – COUPON CALCULATOR
 // ═══════════════════════════════════════
 const EXAMPLES = [
-  { name: 'Exemple 1 (tous positifs)', prices: [120,142,138,159,111,108,127,134,145,116] },
-  { name: 'Exemple 2 (mixte)', prices: [101,104,92,108,104,103,97,102,101,89] },
-  { name: 'Exemple 3 (tous légèrement positifs)', prices: [100.50,100.25,103.25,101,102,104,101.25,100.50,100.75,103] },
-  { name: 'Exemple 4 (pertes profondes)', prices: [62,100.50,98,106,65,112,103,118,102,86] },
+  { name: 'Exemple 1', desc: 'tous positifs', prices: [120,142,138,159,111,108,127,134,145,116], useBase100: true },
+  { name: 'Exemple 2', desc: 'mixte', prices: [101,104,92,108,104,103,97,102,101,89], useBase100: true },
+  { name: 'Exemple 3', desc: 'légèrement positifs', prices: [100.50,100.25,103.25,101,102,104,101.25,100.50,100.75,103], useBase100: true },
+  { name: 'Exemple 4', desc: 'pertes profondes', prices: [62,100.50,98,106,65,112,103,118,102,86], useBase100: true },
 ];
+let couponUseBase100 = true; // true for term sheet examples ($100), false for real initial prices
 
 function initTab1() {
   // Example buttons
   const btnsEl = document.getElementById('example-btns');
+  // Content built from trusted DATA constants only
   btnsEl.innerHTML = EXAMPLES.map((ex, i) =>
     '<button class="example-btn" onclick="loadExample('+i+')">'+ex.name+'</button>'
-  ).join('') + '<button class="example-btn" onclick="clearCoupon()">Personnaliser</button>';
+  ).join('') + '<button class="example-btn" onclick="switchToRealPrices()">Prix réels</button>';
 
   // Build table rows with real tickers (all content is from trusted DATA constants, not user input)
   const tbody = document.getElementById('coupon-tbody');
@@ -778,33 +801,73 @@ function initTab1() {
 }
 
 function loadExample(idx) {
+  couponUseBase100 = true;
   document.querySelectorAll('.example-btn').forEach((b,i) => b.classList.toggle('active', i===idx));
   const ex = EXAMPLES[idx];
   for (let i = 0; i < 10; i++) {
+    document.getElementById('cc-init-'+i).textContent = '$100.00';
     document.getElementById('cc-final-'+i).value = ex.prices[i];
   }
   recalcCoupon();
 }
 
-function clearCoupon() {
-  document.querySelectorAll('.example-btn').forEach(b => b.classList.remove('active'));
+function switchToRealPrices() {
+  couponUseBase100 = false;
+  document.querySelectorAll('.example-btn').forEach((b,i) => b.classList.toggle('active', i === EXAMPLES.length));
   for (let i = 0; i < 10; i++) {
+    const s = DATA.stocks[i];
+    document.getElementById('cc-init-'+i).textContent = fmtMoney(s.initial_price_raw);
     document.getElementById('cc-final-'+i).value = '';
   }
+  recalcCoupon();
 }
 
 function recalcCoupon() {
-  const initPrice = 100;
   const returns = [];
+  let anyEmpty = false;
   for (let i = 0; i < 10; i++) {
-    const finalP = parseFloat(document.getElementById('cc-final-'+i).value) || 0;
+    const initPrice = couponUseBase100 ? 100 : DATA.stocks[i].initial_price_raw;
+    const val = document.getElementById('cc-final-'+i).value;
+    if (val === '' || isNaN(parseFloat(val))) {
+      returns.push(null);
+      anyEmpty = true;
+      document.getElementById('cc-ret-'+i).textContent = '–';
+      document.getElementById('cc-regime-'+i).textContent = '–';
+      document.getElementById('cc-perf-'+i).textContent = '–';
+      document.getElementById('cc-wperf-'+i).textContent = '–';
+      continue;
+    }
+    const finalP = parseFloat(val);
     returns.push((finalP - initPrice) / initPrice);
+  }
+  if (anyEmpty) {
+    document.getElementById('cs-wavg').textContent = '–';
+    document.getElementById('cs-wavg').style.color = '';
+    document.getElementById('cs-rate').textContent = '–';
+    document.getElementById('cs-rate').style.color = '';
+    document.getElementById('cs-pay').textContent = '–';
+    document.getElementById('cs-pay').style.color = '';
+    // Still update rows that have values
+    const validReturns = returns.map(r => r === null ? 0 : r);
+    const result = computeCoupon(validReturns);
+    for (let i = 0; i < 10; i++) {
+      if (returns[i] === null) continue;
+      const r = result.rows[i];
+      document.getElementById('cc-ret-'+i).textContent = fmtPct(r.ret);
+      // Content from trusted computeCoupon output
+      document.getElementById('cc-regime-'+i).innerHTML = '<span class="regime-badge '+r.regime+'">'+
+        (r.regime==='digital'?'Digital':r.regime==='passthrough'?'Passthrough':'Plancher')+'</span>';
+      document.getElementById('cc-perf-'+i).textContent = fmtPct(r.perf);
+      document.getElementById('cc-wperf-'+i).textContent = fmtPct(r.weighted);
+    }
+    return;
   }
   const result = computeCoupon(returns);
   for (let i = 0; i < 10; i++) {
     const r = result.rows[i];
     document.getElementById('cc-ret-'+i).textContent = fmtPct(r.ret);
-    document.getElementById('cc-regime-'+i).innerHTML = '<span class="regime-badge '+r.regime+'">'+ 
+    // Content from trusted computeCoupon output
+    document.getElementById('cc-regime-'+i).innerHTML = '<span class="regime-badge '+r.regime+'">'+
       (r.regime==='digital'?'Digital':r.regime==='passthrough'?'Passthrough':'Plancher')+'</span>';
     document.getElementById('cc-perf-'+i).textContent = fmtPct(r.perf);
     document.getElementById('cc-wperf-'+i).textContent = fmtPct(r.weighted);
@@ -933,6 +996,7 @@ function initTab3() {
   // Build correlation matrix display
   buildMatrixDisplay('corr-matrix-display', DATA.correlation_matrix.matrix, DATA.correlation_matrix.tickers);
   buildMatrixDisplay('cholesky-matrix-display', DATA.cholesky_L.matrix, DATA.cholesky_L.tickers, true);
+  demoZCorrelation();
 
   // Stock selector for endpoint chart
   const sel = document.getElementById('mc-stock-select');
@@ -955,6 +1019,38 @@ function buildMatrixDisplay(elId, matrix, tickers, isLower=false) {
   }
   html += '</tbody></table>';
   document.getElementById(elId).innerHTML = html;
+}
+
+function demoZCorrelation() {
+  const L = cholesky(DATA.correlation_matrix.matrix);
+  const tickers = DATA.correlation_matrix.tickers;
+  const n = tickers.length;
+  // Generate independent Z (using Math.random for the demo)
+  const savedRng = rngFn;
+  rngFn = Math.random;
+  const Z = [];
+  for (let i = 0; i < n; i++) Z.push(normalRandom());
+  rngFn = savedRng;
+  // Multiply by L
+  const Zcorr = [];
+  for (let i = 0; i < n; i++) {
+    let sum = 0;
+    for (let j = 0; j <= i; j++) sum += L[i][j] * Z[j];
+    Zcorr.push(sum);
+  }
+  // Render tables (trusted data only, no user input)
+  let h1 = '<tbody>';
+  let h2 = '<tbody>';
+  for (let i = 0; i < n; i++) {
+    const color1 = Math.abs(Z[i]) > 1.96 ? 'var(--red)' : 'var(--charcoal)';
+    const color2 = Math.abs(Zcorr[i]) > 1.96 ? 'var(--red)' : 'var(--charcoal)';
+    h1 += '<tr><th style="background:var(--charcoal);color:white;font-size:10px;">'+tickers[i]+'</th><td style="color:'+color1+'">'+Z[i].toFixed(3)+'</td></tr>';
+    h2 += '<tr><th style="background:var(--charcoal);color:white;font-size:10px;">'+tickers[i]+'</th><td style="color:'+color2+'">'+Zcorr[i].toFixed(3)+'</td></tr>';
+  }
+  h1 += '</tbody>';
+  h2 += '</tbody>';
+  document.getElementById('z-indep-table').innerHTML = h1;
+  document.getElementById('z-corr-table').innerHTML = h2;
 }
 
 // --- Seeded PRNG (Mulberry32) ---

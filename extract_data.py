@@ -190,6 +190,18 @@ def main():
     for t in TICKERS:
         print(f"    {t}: {s0_prices[t]:.2f}")
 
+    # --- Adjusted initial prices at trade date (Sept 26, 2011) ---
+    # The TICKER sheet has RAW market prices, but price_history uses adjusted prices.
+    # We need the adjusted price at the trade date for consistent payoff calculation.
+    trade_date = "2011-09-26"
+    trade_idx = next(i for i, d in enumerate(common_dates) if d >= trade_date)
+    trade_date_actual = common_dates[trade_idx]
+    adj_initial_prices = {}
+    print(f"\n  Adjusted initial prices (trade date {trade_date_actual}):")
+    for t in TICKERS:
+        adj_initial_prices[t] = aligned_prices[t][trade_idx]
+        print(f"    {t}: adj={adj_initial_prices[t]:.4f}  (raw from TICKER: {initial_prices.get(t)})")
+
     # --- Weekly std devs and annualized vols ---
     weekly_stds = {}
     for ticker in TICKERS:
@@ -234,7 +246,9 @@ def main():
                 "ticker": t,
                 "name": STOCK_NAMES[t],
                 "exchange": EXCHANGES[t],
-                "initial_price": initial_prices.get(t),
+                "initial_price_raw": initial_prices.get(t),
+                "initial_price_adj": round(adj_initial_prices[t], 4),
+                "initial_price_adj_date": trade_date_actual,
                 "weight": 0.10,
                 "s0_price": round(s0_prices[t], 4),
                 "s0_date": last_date,

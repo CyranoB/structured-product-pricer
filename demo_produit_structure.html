@@ -579,6 +579,150 @@ tr:hover { background: var(--teal-light); }
     </div>
   </div>
 
+  <div class="card">
+    <button class="collapsible-toggle" id="matlab-toggle" onclick="toggleCollapsible('matlab')">
+      Code Matlab : Cholesky & Monte Carlo
+    </button>
+    <p style="font-size:12px;color:var(--text-secondary);margin-bottom:8px;">
+      Script complet et commenté pour reproduire la simulation dans Matlab. Copier-coller dans un fichier <code>.m</code>.
+    </p>
+    <div class="collapsible-content" id="matlab-content">
+      <pre style="background:var(--charcoal);color:#e0e0e0;padding:20px;border-radius:3px;font-family:var(--font-mono);font-size:11px;line-height:1.6;overflow-x:auto;margin-top:12px;"><code>% =========================================================================
+% ÉVALUATION DU CD NUMÉRIQUE ANNUEL - DEVOIR 2 (MATH40602)
+% Simulation Monte Carlo avec décomposition de Cholesky
+% Date d'évaluation : 31 Octobre 2016
+% =========================================================================
+
+clear; clc; close all;
+
+%% 1. PARAMÈTRES DU PRODUIT
+Nominal       = 1000;       % Dépôt initial ($)
+DigitalCoupon = 0.065;      % Coupon numérique (6.50%)
+Floor         = -0.30;      % Plancher par titre (-30%)
+T             = 11/12;      % Temps restant (≈ 0.9167 an)
+N             = 10000;      % Nombre de simulations Monte Carlo
+r             = 0.0125;     % Taux sans risque (US Treasury 1 an, oct. 2016)
+
+%% 2. DONNÉES DE MARCHÉ (prix ajustés splits/dividendes)
+% Ordre : [AAPL, C, F, HPQ, JNJ, LLY, LOW, MO, MRK, WMT]
+
+% Prix initiaux ajustés (Trade Date : 26 sept. 2011)
+S_init = [13.62; 29.51; 10.00; 10.72; 75.54; 47.72; 20.95; 37.23; 39.76; 19.44];
+
+% Prix au 31 octobre 2016 (S0)
+S0 = [31.05; 57.79; 14.56; 16.87; 159.39; 114.51; 79.61; 115.52; 85.37; 29.80];
+
+% Volatilités annualisées (écart-type des log-rendements hebdo × √52)
+sigma = [0.3392; 0.6552; 0.5156; 0.3334; 0.1514; 0.2158; 0.3070; 0.1810; 0.2425; 0.1876];
+
+% Rendements en dividendes (annualisés, source Bloomberg)
+q = [0.0192; 0.0063; 0.0725; 0.0352; 0.0269; 0.0272; 0.0188; 0.0350; 0.0328; 0.0284];
+
+nStocks = length(S0);
+
+%% 3. MATRICE DE CORRÉLATION ET DÉCOMPOSITION DE CHOLESKY
+% Matrice de corrélation (10x10) calculée à partir des rendements
+% logarithmiques hebdomadaires sur 564 observations communes
+CorrMat = [
+  1.0000 0.3429 0.3367 0.3678 0.2397 0.2385 0.3543 0.2097 0.2720 0.2156;
+  0.3429 1.0000 0.5853 0.2927 0.3807 0.4169 0.4834 0.2329 0.3883 0.2176;
+  0.3367 0.5853 1.0000 0.3608 0.3791 0.4354 0.5305 0.3210 0.3008 0.3214;
+  0.3678 0.2927 0.3608 1.0000 0.3737 0.2829 0.3733 0.1961 0.2919 0.2874;
+  0.2397 0.3807 0.3791 0.3737 1.0000 0.5803 0.3846 0.4625 0.5404 0.4415;
+  0.2385 0.4169 0.4354 0.2829 0.5803 1.0000 0.4118 0.4072 0.5361 0.4048;
+  0.3543 0.4834 0.5305 0.3733 0.3846 0.4118 1.0000 0.3158 0.3358 0.4714;
+  0.2097 0.2329 0.3210 0.1961 0.4625 0.4072 0.3158 1.0000 0.3931 0.3065;
+  0.2720 0.3883 0.3008 0.2919 0.5404 0.5361 0.3358 0.3931 1.0000 0.3800;
+  0.2156 0.2176 0.3214 0.2874 0.4415 0.4048 0.4714 0.3065 0.3800 1.0000];
+
+% Décomposition de Cholesky : CorrMat = L * L'
+% L est triangulaire inférieure, utilisée pour corréler les chocs
+L = chol(CorrMat, 'lower');
+
+%% 4. SIMULATION MONTE CARLO (un seul pas, M=1)
+% Sous la mesure risque-neutre, le prix terminal suit :
+%   S_T = S0 * exp((r - q - sigma^2/2)*T + sigma*sqrt(T)*Z)
+
+% Dérive risque-neutre pour chaque titre
+drift = (r - q - 0.5 * sigma.^2) * T;    % vecteur [10 x 1]
+
+% Génération de N vecteurs de 10 normales indépendantes
+Z_indep = randn(nStocks, N);             % matrice [10 x N]
+
+% Application de Cholesky pour corréler les chocs
+Z_corr = L * Z_indep;                    % matrice [10 x N]
+
+% Calcul des prix finaux simulés
+choc = sigma * sqrt(T) .* Z_corr;        % [10 x N]
+S_final = S0 .* exp(drift + choc);       % [10 x N]
+
+%% 5. CALCUL DU PAYOFF
+% Rendement par rapport au prix initial de 2011
+StockReturns = (S_final - S_init) ./ S_init;   % [10 x N]
+
+% Application des règles du produit structuré
+Perf = zeros(nStocks, N);
+
+% (1) Rendement > 0% => Performance = Digital Coupon
+Perf(StockReturns > 0) = DigitalCoupon;
+
+% (2) -30% < Rendement <= 0% => Performance = Rendement
+idx_mid = (StockReturns <= 0) &amp; (StockReturns > Floor);
+Perf(idx_mid) = StockReturns(idx_mid);
+
+% (3) Rendement <= -30% => Performance = Floor (-30%)
+Perf(StockReturns <= Floor) = Floor;
+
+% Taux du coupon = max(0, moyenne pondérée des performances)
+CouponRate = max(0, mean(Perf, 1));       % [1 x N], poids = 1/10
+
+% Paiement final = Principal + Coupon
+Payoffs = Nominal + Nominal * CouponRate; % [1 x N]
+
+%% 6. ACTUALISATION ET RÉSULTAT
+PrixCD = exp(-r * T) * mean(Payoffs);
+StdPayoffs = std(Payoffs);
+IC95 = 1.96 * StdPayoffs / sqrt(N);
+
+fprintf('\\n=== RÉSULTAT ===\\n');
+fprintf('Prix estimé du CD : %.2f $\\n', PrixCD);
+fprintf('Coupon moyen      : %.2f $\\n', mean(Payoffs) - Nominal);
+fprintf('Intervalle (95%%)  : [%.2f, %.2f]\\n', ...
+    exp(-r*T)*(mean(Payoffs)-IC95), exp(-r*T)*(mean(Payoffs)+IC95));
+fprintf('Simulations       : %d\\n', N);
+
+%% 7. GRAPHIQUES
+
+% --- Histogramme des coupons ---
+figure;
+histogram(Nominal * CouponRate, 20, 'FaceColor', [0 0.52 0.56]);
+xlabel('Paiement du coupon ($)');
+ylabel('Fréquence');
+title('Distribution des paiements de coupon (Monte Carlo)');
+grid on;
+
+% --- Convergence ---
+figure;
+running_mean = cumsum(Payoffs) ./ (1:N);
+running_std  = zeros(1, N);
+for k = 1:N
+    running_std(k) = std(Payoffs(1:k));
+end
+ci_upper = exp(-r*T) * (running_mean + 1.96 * running_std ./ sqrt(1:N));
+ci_lower = exp(-r*T) * (running_mean - 1.96 * running_std ./ sqrt(1:N));
+running_pv = exp(-r*T) * running_mean;
+
+plot(1:N, running_pv, 'k-', 'LineWidth', 1.5); hold on;
+plot(1:N, ci_upper, 'b--', 'LineWidth', 0.8);
+plot(1:N, ci_lower, 'b--', 'LineWidth', 0.8);
+xlabel('Nombre de simulations');
+ylabel('Prix estimé ($)');
+title('Convergence de l''estimateur Monte Carlo');
+legend('Prix moyen', 'IC 95%', 'Location', 'best');
+grid on;</code></pre>
+    </div>
+  </div>
+
   <div id="mc-results-section" style="display:none;">
     <div class="mc-price-card" id="mc-price-card"></div>
     <div class="mc-results" style="margin-top:20px;">

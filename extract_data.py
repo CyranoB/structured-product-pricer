@@ -93,6 +93,27 @@ def extract_initial_prices(wb):
     return prices
 
 
+def extract_dividend_yields(wb):
+    """Extract the most recent dividend yield for each stock from the div yield sheet."""
+    ws = wb["div yield"]
+    # Columns: B=AAPL, E=C, H=F, K=HPQ, N=JNJ, Q=LLY, T=LOW, W=MO, Z=MRK, AC=WMT
+    ticker_cols = {
+        "AAPL": 2, "C": 5, "F": 8, "HPQ": 11, "JNJ": 14,
+        "LLY": 17, "LOW": 20, "MO": 23, "MRK": 26, "WMT": 29,
+    }
+    yields = {}
+    for ticker, col in ticker_cols.items():
+        last_val = None
+        for row in range(ws.max_row, 1, -1):
+            v = ws.cell(row, col).value
+            if v is not None and isinstance(v, (int, float)):
+                last_val = v
+                break
+        # Convert from percentage to decimal
+        yields[ticker] = last_val / 100.0 if last_val else 0.0
+    return yields
+
+
 def compute_log_returns(prices):
     """Compute log returns from a price series."""
     returns = []
@@ -139,6 +160,10 @@ def main():
     all_prices = {}
     volatilities = {}
     initial_prices = extract_initial_prices(wb)
+    div_yields = extract_dividend_yields(wb)
+    print(f"\n  Dividend yields (annualized):")
+    for t in TICKERS:
+        print(f"    {t}: {div_yields[t]*100:.2f}%")
 
     for ticker in TICKERS:
         print(f"  Extracting {ticker} ({SHEET_MAP[ticker]})...")
@@ -254,6 +279,7 @@ def main():
                 "s0_date": last_date,
                 "annualized_vol": round(volatilities[t], 6),
                 "weekly_std": round(weekly_stds[t], 6),
+                "div_yield": round(div_yields[t], 6),
             }
             for t in TICKERS
         ],

@@ -1,7 +1,7 @@
 {
   "meta": {
     "source": "Devoir 2 - MQ2 - lymoi.xlsx",
-    "extracted_at": "2026-03-29T18:16:11.897307",
+    "extracted_at": "2026-03-29T19:50:16.015836",
     "common_date_range": [
       "2006-01-06",
       "2016-10-28"
@@ -46,7 +46,8 @@
       "s0_price": 31.0515,
       "s0_date": "2016-10-28",
       "annualized_vol": 0.339177,
-      "weekly_std": 0.047035
+      "weekly_std": 0.047035,
+      "div_yield": 0.01917
     },
     {
       "ticker": "C",
@@ -59,7 +60,8 @@
       "s0_price": 57.7914,
       "s0_date": "2016-10-28",
       "annualized_vol": 0.655157,
-      "weekly_std": 0.090854
+      "weekly_std": 0.090854,
+      "div_yield": 0.006255
     },
     {
       "ticker": "F",
@@ -72,7 +74,8 @@
       "s0_price": 14.5586,
       "s0_date": "2016-10-28",
       "annualized_vol": 0.515575,
-      "weekly_std": 0.071497
+      "weekly_std": 0.071497,
+      "div_yield": 0.072526
     },
     {
       "ticker": "HPQ",
@@ -85,7 +88,8 @@
       "s0_price": 16.8716,
       "s0_date": "2016-10-28",
       "annualized_vol": 0.333422,
-      "weekly_std": 0.046237
+      "weekly_std": 0.046237,
+      "div_yield": 0.035202
     },
     {
       "ticker": "JNJ",
@@ -98,7 +102,8 @@
       "s0_price": 159.3866,
       "s0_date": "2016-10-28",
       "annualized_vol": 0.151356,
-      "weekly_std": 0.020989
+      "weekly_std": 0.020989,
+      "div_yield": 0.026879
     },
     {
       "ticker": "LLY",
@@ -111,7 +116,8 @@
       "s0_price": 114.508,
       "s0_date": "2016-10-28",
       "annualized_vol": 0.215831,
-      "weekly_std": 0.02993
+      "weekly_std": 0.02993,
+      "div_yield": 0.027237
     },
     {
       "ticker": "LOW",
@@ -124,7 +130,8 @@
       "s0_price": 79.6116,
       "s0_date": "2016-10-28",
       "annualized_vol": 0.307011,
-      "weekly_std": 0.042575
+      "weekly_std": 0.042575,
+      "div_yield": 0.018798
     },
     {
       "ticker": "MO",
@@ -137,7 +144,8 @@
       "s0_price": 115.5178,
       "s0_date": "2016-10-28",
       "annualized_vol": 0.181049,
-      "weekly_std": 0.025107
+      "weekly_std": 0.025107,
+      "div_yield": 0.034988
     },
     {
       "ticker": "MRK",
@@ -150,7 +158,8 @@
       "s0_price": 85.3683,
       "s0_date": "2016-10-28",
       "annualized_vol": 0.242549,
-      "weekly_std": 0.033635
+      "weekly_std": 0.033635,
+      "div_yield": 0.032795
     },
     {
       "ticker": "WMT",
@@ -163,7 +172,8 @@
       "s0_price": 29.7986,
       "s0_date": "2016-10-28",
       "annualized_vol": 0.187561,
-      "weekly_std": 0.02601
+      "weekly_std": 0.02601,
+      "div_yield": 0.028433
     }
   ],
   "correlation_matrix": {

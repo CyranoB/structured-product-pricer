@@ -294,7 +294,34 @@ tr:hover { background: var(--teal-light); }
 .matrix-table { font-family: var(--font-mono); font-size: 11px; border-collapse: collapse; }
 .matrix-table td { padding: 4px 6px; text-align: right; min-width: 52px; }
 .matrix-table th { padding: 4px 6px; font-size: 10px; }
-/* matrix-eq removed: matrices now stacked vertically */
+/* Collapsible sections */
+.collapsible-toggle {
+  display: flex; align-items: center; gap: 8px; cursor: pointer;
+  font-family: var(--font-serif); font-size: 15px; font-weight: 400;
+  color: var(--teal); border: none; background: none; padding: 0;
+  margin: 8px 0 4px;
+}
+.collapsible-toggle::before {
+  content: ''; display: inline-block; width: 6px; height: 6px;
+  border-right: 2px solid var(--teal); border-bottom: 2px solid var(--teal);
+  transform: rotate(-45deg); transition: transform 0.2s;
+}
+.collapsible-toggle.open::before { transform: rotate(45deg); }
+.collapsible-content { display: none; }
+.collapsible-content.open { display: block; }
+/* Validation */
+.input-error { border-color: var(--red) !important; background: var(--red-bg) !important; }
+.validation-msg { font-size: 11px; color: var(--red); margin-top: 4px; display: none; }
+.validation-msg.visible { display: block; }
+/* MC inline result */
+.mc-inline-result {
+  display: none; margin-top: 12px; padding: 12px 16px;
+  background: var(--charcoal); color: white; border-radius: 3px;
+  font-family: var(--font-mono); font-size: 15px; cursor: pointer;
+  transition: background 0.2s;
+}
+.mc-inline-result:hover { background: var(--teal); }
+.mc-inline-result.visible { display: block; }
 .matrix-label {
   font-family: var(--font-serif);
   font-weight: 400;
@@ -368,8 +395,9 @@ tr:hover { background: var(--teal-light); }
       <div>
         <canvas id="payoff-chart" height="280"></canvas>
         <div class="slider-row">
-          <span style="font-size:13px;">Rendement :</span>
-          <input type="range" id="return-slider" min="-50" max="50" value="5" step="0.5">
+          <span style="font-size:13px;">Rendement&nbsp;:</span>
+          <input type="range" id="return-slider" min="-50" max="50" value="5" step="0.5" list="slider-ticks">
+          <datalist id="slider-ticks"><option value="-30"></option><option value="0"></option></datalist>
           <span class="slider-value" id="slider-value">+5.0%</span>
         </div>
       </div>
@@ -428,7 +456,7 @@ tr:hover { background: var(--teal-light); }
   <div class="card">
     <h2>Historique des prix (normalisé, base 100)</h2>
     <div class="chart-controls" id="stock-toggles"></div>
-    <canvas id="price-chart" height="350"></canvas>
+    <canvas id="price-chart" height="420"></canvas>
   </div>
   <div class="card">
     <h2>Volatilités</h2>
@@ -451,35 +479,21 @@ tr:hover { background: var(--teal-light); }
 <!-- ═══════════════════════════════════════ -->
 <div class="tab-page" id="tab-3">
   <div class="card">
-    <h2>Étape 1 : Décomposition de Cholesky</h2>
-    <p style="font-size:13px;color:var(--text-secondary);margin-bottom:12px;">
-      Pour simuler des rendements corrélés, on décompose la matrice de corrélation C = LL<sup>T</sup>. La matrice L (triangulaire inférieure) transforme des variables aléatoires indépendantes Z en variables corrélées : Z<sub>corr</sub> = L × Z.
-    </p>
-    <div class="formula-box" style="margin-bottom:24px;">
-      <span style="font-family:var(--font-serif);font-size:16px;color:var(--charcoal);">C</span>
-      <span style="margin:0 8px;">=</span>
-      <span style="font-family:var(--font-serif);font-size:16px;color:var(--charcoal);">L</span>
-      <span style="margin:0 4px;">·</span>
-      <span style="font-family:var(--font-serif);font-size:16px;color:var(--charcoal);">L</span><sup style="font-size:11px;">T</sup>
-    </div>
-    <h3>Matrice de corrélation C</h3>
-    <div class="matrix-display" id="corr-matrix-display"></div>
-    <h3 style="margin-top:28px;">Matrice L (facteur de Cholesky, triangulaire inférieure)</h3>
-    <p style="font-size:12px;color:var(--text-secondary);margin-bottom:8px;">Les cellules vides correspondent aux éléments nuls de la matrice triangulaire supérieure.</p>
-    <div class="matrix-display" id="cholesky-matrix-display"></div>
-  </div>
-
-  <div class="card">
-    <h2>Étape 2 : Modèle GBM & Configuration</h2>
+    <h2>Simulation de Monte Carlo</h2>
     <div class="formula-box" id="gbm-formula"></div>
+    <p style="font-size:13px;color:var(--text-secondary);margin:16px 0 20px;">
+      On simule N trajectoires de prix via le mouvement brownien géométrique avec rendements corrélés (décomposition de Cholesky).
+    </p>
     <div class="mc-config">
       <div class="mc-field">
         <label>Date de début (S₀)</label>
-        <input type="date" id="mc-start" value="2016-10-31">
+        <input type="date" id="mc-start" value="2016-10-31" oninput="mc_validate()">
+        <div class="validation-msg" id="mc-start-err"></div>
       </div>
       <div class="mc-field">
         <label>Date de fin (S_T)</label>
-        <input type="date" id="mc-end" value="2017-09-29">
+        <input type="date" id="mc-end" value="2017-09-29" oninput="mc_validate()">
+        <div class="validation-msg" id="mc-end-err"></div>
       </div>
       <div class="mc-field">
         <label>Nombre de trajectoires (N)</label>
@@ -487,11 +501,11 @@ tr:hover { background: var(--teal-light); }
       </div>
       <div class="mc-field">
         <label>Taux sans risque (r)</label>
-        <input type="number" id="mc-rate" value="0.0125" min="0" max="0.1" step="0.0001">
+        <input type="number" id="mc-rate" value="0.0125" min="0" max="0.1" step="0.0001" placeholder="US Treasury ~1-2%">
       </div>
       <div class="mc-field">
-        <label>Graine RNG (optionnel, pour reproductibilité)</label>
-        <input type="number" id="mc-seed" value="" placeholder="ex: 42">
+        <label>Graine RNG (optionnel, reproductibilité)</label>
+        <input type="number" id="mc-seed" value="" placeholder="ex : 42">
       </div>
     </div>
     <button class="mc-run-btn" id="mc-run-btn" onclick="mc_run()">
@@ -499,6 +513,23 @@ tr:hover { background: var(--teal-light); }
     </button>
     <progress class="mc-progress" id="mc-progress" value="0" max="100" style="display:none;"></progress>
     <span id="mc-status" style="font-size:13px;color:var(--text-secondary);"></span>
+    <div class="mc-inline-result" id="mc-inline-result" onclick="document.getElementById('mc-results-section').scrollIntoView({behavior:'smooth'})"></div>
+  </div>
+
+  <div class="card">
+    <button class="collapsible-toggle" id="cholesky-toggle" onclick="toggleCollapsible('cholesky')">
+      Décomposition de Cholesky (C = L · L<sup>T</sup>)
+    </button>
+    <p style="font-size:12px;color:var(--text-secondary);margin-bottom:8px;">
+      Pour simuler des rendements corrélés, on décompose la matrice de corrélation C = LL<sup>T</sup>. La matrice L transforme des variables indépendantes Z en variables corrélées : Z<sub>corr</sub> = L × Z.
+    </p>
+    <div class="collapsible-content" id="cholesky-content">
+      <h3 style="margin-top:16px;">Matrice de corrélation C</h3>
+      <div class="matrix-display" id="corr-matrix-display"></div>
+      <h3 style="margin-top:28px;">Matrice L (facteur de Cholesky, triangulaire inférieure)</h3>
+      <p style="font-size:12px;color:var(--text-secondary);margin-bottom:8px;">Les cellules vides correspondent aux éléments nuls de la matrice triangulaire supérieure.</p>
+      <div class="matrix-display" id="cholesky-matrix-display"></div>
+    </div>
   </div>
 
   <div id="mc-results-section" style="display:none;">
@@ -556,6 +587,32 @@ function switchTab(idx) {
 function fmt(v, decimals=2) { return v.toFixed(decimals); }
 function fmtPct(v) { return (v >= 0 ? '+' : '') + (v * 100).toFixed(2) + '%'; }
 function fmtMoney(v) { return '$' + v.toFixed(2); }
+function fmtDateFr(iso) {
+  const months = ['janv.','févr.','mars','avr.','mai','juin','juil.','août','sept.','oct.','nov.','déc.'];
+  const [y,m,d] = iso.split('-');
+  return parseInt(d) + ' ' + months[parseInt(m)-1] + ' ' + y;
+}
+function toggleCollapsible(id) {
+  const toggle = document.getElementById(id + '-toggle');
+  const content = document.getElementById(id + '-content');
+  toggle.classList.toggle('open');
+  content.classList.toggle('open');
+}
+function mc_validate() {
+  const start = document.getElementById('mc-start').value;
+  const end = document.getElementById('mc-end').value;
+  const errEl = document.getElementById('mc-end-err');
+  if (start && end && end <= start) {
+    document.getElementById('mc-end').classList.add('input-error');
+    errEl.textContent = 'La date de fin doit être postérieure à la date de début';
+    errEl.classList.add('visible');
+    return false;
+  } else {
+    document.getElementById('mc-end').classList.remove('input-error');
+    errEl.classList.remove('visible');
+    return true;
+  }
+}
 
 function payoffPerf(ret, digital=0.065, floor=-0.30) {
   if (ret > 0) return { perf: digital, regime: 'digital' };
@@ -592,8 +649,8 @@ function initTab0() {
     ['Instrument', p.name],
     ['CUSIP', p.cusip],
     ['Durée', p.term_years + ' ans'],
-    ['Date d\'émission', p.trade_date],
-    ['Échéance', p.maturity_date],
+    ['Date d\'émission', fmtDateFr(p.trade_date)],
+    ['Échéance', fmtDateFr(p.maturity_date)],
     ['Dénomination', fmtMoney(p.denomination)],
     ['Coupon numérique', fmtPct(p.digital_coupon)],
     ['Plancher', fmtPct(p.floor)],
@@ -697,14 +754,15 @@ function initTab1() {
     '<button class="example-btn" onclick="loadExample('+i+')">'+ex.name+'</button>'
   ).join('') + '<button class="example-btn" onclick="clearCoupon()">Personnaliser</button>';
 
-  // Build table rows (using $100 initial for examples)
+  // Build table rows with real tickers (all content is from trusted DATA constants, not user input)
   const tbody = document.getElementById('coupon-tbody');
   tbody.innerHTML = '';
   for (let i = 0; i < 10; i++) {
+    const s = DATA.stocks[i];
     const tr = document.createElement('tr');
-    tr.innerHTML = '<td>Stock '+(i+1)+'</td>'+
+    tr.innerHTML = '<td><b>'+s.ticker+'</b> <span style="color:var(--text-secondary);font-size:11px;">'+s.name+'</span></td>'+
       '<td class="num" id="cc-init-'+i+'">$100.00</td>'+
-      '<td class="num"><input class="coupon-input" id="cc-final-'+i+'" type="number" step="0.01" value="110" oninput="recalcCoupon()"></td>'+
+      '<td class="num"><input class="coupon-input" id="cc-final-'+i+'" type="number" step="0.01" min="0" value="110" oninput="recalcCoupon()"></td>'+
       '<td class="num" id="cc-ret-'+i+'"></td>'+
       '<td id="cc-regime-'+i+'"></td>'+
       '<td class="num" id="cc-perf-'+i+'"></td>'+
@@ -841,12 +899,12 @@ function buildHeatmap() {
   tickers.forEach(t => html += '<th>'+t+'</th>');
   html += '</tr></thead><tbody>';
   for (let i = 0; i < tickers.length; i++) {
-    html += '<tr><th style="background:var(--navy);color:white;">'+tickers[i]+'</th>';
+    html += '<tr><th style="background:var(--charcoal);color:white;">'+tickers[i]+'</th>';
     for (let j = 0; j < tickers.length; j++) {
       const v = matrix[i][j];
       const intensity = Math.abs(v);
       let bg;
-      if (i === j) bg = '#2d3436';
+      if (i === j) bg = '#9e9a94';
       else if (v >= 0) bg = 'rgba(0, 131, 143, ' + (0.05 + intensity * 0.55) + ')';
       else bg = 'rgba(183, 28, 28, ' + (0.05 + intensity * 0.55) + ')';
       const textColor = (i === j || intensity > 0.55) ? 'white' : '#2d3436';
@@ -938,9 +996,11 @@ function cholesky(matrix) {
 }
 
 function mc_run() {
+  if (!mc_validate()) return;
   const nSim = parseInt(document.getElementById('mc-nsim').value) || 10000;
   const r = parseFloat(document.getElementById('mc-rate').value) || 0.0125;
   const seedVal = document.getElementById('mc-seed').value;
+  document.getElementById('mc-inline-result').classList.remove('visible');
 
   // Setup RNG
   if (seedVal !== '') {
@@ -1060,8 +1120,16 @@ function mc_run() {
       btn.disabled = false;
       progress.style.display = 'none';
       status.textContent = 'Terminé en ' + elapsed + 's';
+      // Show inline result near the button
+      const inlineEl = document.getElementById('mc-inline-result');
+      inlineEl.textContent = 'Prix estimé : ' + fmtMoney(cdPrice) + ' — cliquer pour voir les détails ↓';
+      inlineEl.classList.add('visible');
       document.getElementById('mc-results-section').style.display = 'block';
       mc_displayResults();
+      // Auto-scroll to results
+      setTimeout(() => {
+        document.getElementById('mc-results-section').scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 100);
     }
   }
   processBatch();

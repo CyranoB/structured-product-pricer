@@ -944,7 +944,7 @@ function buildMatrixDisplay(elId, matrix, tickers, isLower=false) {
   tickers.forEach(t => html += '<th>'+t+'</th>');
   html += '</tr></thead><tbody>';
   for (let i = 0; i < tickers.length; i++) {
-    html += '<tr><th style="background:var(--navy);color:white;font-size:10px;">'+tickers[i]+'</th>';
+    html += '<tr><th style="background:var(--charcoal);color:white;font-size:10px;">'+tickers[i]+'</th>';
     for (let j = 0; j < tickers.length; j++) {
       const v = matrix[i][j];
       const show = !isLower || j <= i;

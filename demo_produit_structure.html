@@ -845,7 +845,7 @@ function initTab1() {
   // Content built from trusted DATA constants only
   btnsEl.innerHTML = EXAMPLES.map((ex, i) =>
     '<button class="example-btn" onclick="loadExample('+i+')">'+ex.name+'</button>'
-  ).join('') + '<button class="example-btn" onclick="switchToRealPrices()">Prix réels</button>';
+  ).join('') + '<button class="example-btn" onclick="switchToRealPrices()">Prix réels (oct. 2016)</button>';
 
   // Build table rows with real tickers (all content is from trusted DATA constants, not user input)
   const tbody = document.getElementById('coupon-tbody');
@@ -886,8 +886,9 @@ function switchToRealPrices() {
   document.querySelectorAll('.example-btn').forEach((b,i) => b.classList.toggle('active', i === EXAMPLES.length));
   for (let i = 0; i < 10; i++) {
     const s = DATA.stocks[i];
-    document.getElementById('cc-init-'+i).textContent = fmtMoney(s.initial_price_raw);
-    document.getElementById('cc-final-'+i).value = '';
+    // Use adjusted prices for both initial and final (consistent basis after splits/dividends)
+    document.getElementById('cc-init-'+i).textContent = fmtMoney(s.initial_price_adj);
+    document.getElementById('cc-final-'+i).value = s.s0_price.toFixed(2);
   }
   recalcCoupon();
 }
@@ -896,7 +897,7 @@ function recalcCoupon() {
   const returns = [];
   let anyEmpty = false;
   for (let i = 0; i < 10; i++) {
-    const initPrice = couponUseBase100 ? 100 : DATA.stocks[i].initial_price_raw;
+    const initPrice = couponUseBase100 ? 100 : DATA.stocks[i].initial_price_adj;
     const val = document.getElementById('cc-final-'+i).value;
     if (val === '' || isNaN(parseFloat(val))) {
       returns.push(null);

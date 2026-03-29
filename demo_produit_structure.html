@@ -435,8 +435,8 @@ tr:hover { background: var(--teal-light); }
         <p>Si R<sub>i</sub> &gt; 0%, la performance vaut 6,50% indépendamment de l'ampleur de la hausse. C'est un <b>call binaire</b> (cash-or-nothing) au strike K = 0%.</p>
         <h3>2. Put spread (0% / -30%)</h3>
         <p>Entre 0% et -30%, la perte réelle est transmise. Cela équivaut à être <b>vendeur d'un put</b> au strike K₁ = 0% et <b>acheteur d'un put</b> au strike K₂ = -30%. Le put long limite la perte à -30%.</p>
-        <h3>3. Plancher = barrière</h3>
-        <p>Le plancher à -30% agit comme une <b>barrière knock-in</b> : une fois franchi, le régime de paiement change. C'est la composante « exotique » du produit.</p>
+        <h3>3. Plancher (floor)</h3>
+        <p>Le plancher à -30% limite la perte maximale par titre. C'est équivalent au put long du put spread : il empêche la performance de descendre en dessous de -30%, quel que soit le rendement réel.</p>
       </div>
     </div>
     <div class="formula-box" id="decomp-formula"></div>
@@ -509,17 +509,17 @@ tr:hover { background: var(--teal-light); }
     </p>
     <div class="mc-config">
       <div class="mc-field">
-        <label>Date de début (S₀)</label>
-        <input type="date" id="mc-start" value="2016-10-31" oninput="mc_validate()">
-        <div class="validation-msg" id="mc-start-err"></div>
+        <label>Date d'évaluation (S₀)</label>
+        <div style="font-family:var(--font-mono);font-size:14px;padding:8px 0;color:var(--charcoal);">31 oct. 2016</div>
+        <div style="font-size:11px;color:var(--text-tertiary);">Dernière date disponible : 28 oct. 2016</div>
       </div>
       <div class="mc-field">
-        <label>Date de fin (S_T)</label>
-        <input type="date" id="mc-end" value="2017-09-29" oninput="mc_validate()">
-        <div class="validation-msg" id="mc-end-err"></div>
+        <label>Échéance (S_T)</label>
+        <div style="font-family:var(--font-mono);font-size:14px;padding:8px 0;color:var(--charcoal);">29 sept. 2017</div>
+        <div style="font-size:11px;color:var(--text-tertiary);">Δt = 11/12 ≈ 0.917 ans</div>
       </div>
       <div class="mc-field">
-        <label>Nombre de trajectoires (N)</label>
+        <label>Nombre de simulations (N)</label>
         <input type="number" id="mc-nsim" value="10000" min="100" max="50000" step="100">
       </div>
       <div class="mc-field">
@@ -527,10 +527,13 @@ tr:hover { background: var(--teal-light); }
         <input type="number" id="mc-rate" value="0.0125" min="0" max="0.1" step="0.0001" placeholder="US Treasury ~1-2%">
       </div>
       <div class="mc-field">
-        <label>Graine RNG (optionnel, reproductibilité)</label>
+        <label>Graine RNG (reproductibilité)</label>
         <input type="number" id="mc-seed" value="" placeholder="ex : 42">
       </div>
     </div>
+    <p style="font-size:11px;color:var(--text-tertiary);margin-top:8px;">
+      <b>Note :</b> Les prix S₀ et les prix initiaux utilisent les cours ajustés (splits et dividendes) pour assurer la cohérence avec les volatilités historiques. Les prix du prospectus (non ajustés) sont affichés dans l'onglet Produit.
+    </p>
     <button class="mc-run-btn" id="mc-run-btn" onclick="mc_run()">
       Lancer la simulation
     </button>
@@ -642,21 +645,7 @@ function toggleCollapsible(id) {
   toggle.classList.toggle('open');
   content.classList.toggle('open');
 }
-function mc_validate() {
-  const start = document.getElementById('mc-start').value;
-  const end = document.getElementById('mc-end').value;
-  const errEl = document.getElementById('mc-end-err');
-  if (start && end && end <= start) {
-    document.getElementById('mc-end').classList.add('input-error');
-    errEl.textContent = 'La date de fin doit être postérieure à la date de début';
-    errEl.classList.add('visible');
-    return false;
-  } else {
-    document.getElementById('mc-end').classList.remove('input-error');
-    errEl.classList.remove('visible');
-    return true;
-  }
-}
+// Date validation removed: S0 and ST are now fixed from product terms
 
 function payoffPerf(ret, digital=0.065, floor=-0.30) {
   if (ret > 0) return { perf: digital, regime: 'digital' };
@@ -729,7 +718,7 @@ function initTab0() {
 
   // Decomposition formula
   katex.render(
-    'P_i = \\underbrace{6{,}50\\% \\cdot \\mathbf{1}_{\\{R_i > 0\\}}}_{\\text{Call numérique}} + \\underbrace{R_i \\cdot \\mathbf{1}_{\\{-30\\% < R_i \\leq 0\\}}}_{\\text{Put spread}} + \\underbrace{(-30\\%) \\cdot \\mathbf{1}_{\\{R_i \\leq -30\\%\\}}}_{\\text{Plancher (barrière)}}',
+    'P_i = \\underbrace{6{,}50\\% \\cdot \\mathbf{1}_{\\{R_i > 0\\}}}_{\\text{Call numérique}} + \\underbrace{R_i \\cdot \\mathbf{1}_{\\{-30\\% < R_i \\leq 0\\}}}_{\\text{Put spread}} + \\underbrace{(-30\\%) \\cdot \\mathbf{1}_{\\{R_i \\leq -30\\%\\}}}_{\\text{Plancher (put long)}}',
     document.getElementById('decomp-formula'), { displayMode: true }
   );
 }
@@ -1173,7 +1162,6 @@ function cholesky(matrix) {
 }
 
 function mc_run() {
-  if (!mc_validate()) return;
   const nSim = parseInt(document.getElementById('mc-nsim').value) || 10000;
   const r = parseFloat(document.getElementById('mc-rate').value) || 0.0125;
   const seedVal = document.getElementById('mc-seed').value;
@@ -1186,10 +1174,8 @@ function mc_run() {
     rngFn = Math.random;
   }
 
-  // Parse dates and compute deltaT
-  const startDate = new Date(document.getElementById('mc-start').value);
-  const endDate = new Date(document.getElementById('mc-end').value);
-  const deltaT = (endDate - startDate) / (365.25 * 24 * 3600 * 1000);
+  // Fixed dates from product terms: S0 = Oct 31 2016, ST = Sept 29 2017
+  const deltaT = DATA.product.delta_t; // 11/12 ≈ 0.9167
   const sqrtDeltaT = Math.sqrt(deltaT);
 
   // Pre-compute

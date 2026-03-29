@@ -421,6 +421,29 @@ tr:hover { background: var(--teal-light); }
     </div>
     <div class="formula-box" id="payoff-formula"></div>
   </div>
+  <div class="card">
+    <h2>Décomposition en options exotiques</h2>
+    <p style="font-size:13px;color:var(--text-secondary);margin-bottom:16px;">
+      La fonction de performance par titre se décompose en briques élémentaires d'options exotiques. Cette décomposition justifie l'utilisation de la simulation de Monte Carlo pour l'évaluation.
+    </p>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:20px;">
+      <div>
+        <canvas id="decomp-chart" height="280"></canvas>
+      </div>
+      <div style="font-size:13px;line-height:1.7;">
+        <h3>1. Option numérique (Digital Call)</h3>
+        <p>Si R<sub>i</sub> &gt; 0%, la performance vaut 6,50% indépendamment de l'ampleur de la hausse. C'est un <b>call binaire</b> (cash-or-nothing) au strike K = 0%.</p>
+        <h3>2. Put spread (0% / -30%)</h3>
+        <p>Entre 0% et -30%, la perte réelle est transmise. Cela équivaut à être <b>vendeur d'un put</b> au strike K₁ = 0% et <b>acheteur d'un put</b> au strike K₂ = -30%. Le put long limite la perte à -30%.</p>
+        <h3>3. Plancher = barrière</h3>
+        <p>Le plancher à -30% agit comme une <b>barrière knock-in</b> : une fois franchi, le régime de paiement change. C'est la composante « exotique » du produit.</p>
+      </div>
+    </div>
+    <div class="formula-box" id="decomp-formula"></div>
+    <p style="font-size:12px;color:var(--text-secondary);margin-top:12px;">
+      <b>Structure globale du CD :</b> obligation zéro-coupon (principal protégé à 100%) + panier de 10 × (call numérique + put spread), avec taux de coupon = max(0, moyenne pondérée des performances).
+    </p>
+  </div>
 </div>
 
 <!-- ═══════════════════════════════════════ -->
@@ -700,6 +723,64 @@ function initTab0() {
   // Slider
   document.getElementById('return-slider').addEventListener('input', updatePayoffSlider);
   updatePayoffSlider();
+
+  // Decomposition chart
+  buildDecompChart();
+
+  // Decomposition formula
+  katex.render(
+    'P_i = \\underbrace{6{,}50\\% \\cdot \\mathbf{1}_{\\{R_i > 0\\}}}_{\\text{Call numérique}} + \\underbrace{R_i \\cdot \\mathbf{1}_{\\{-30\\% < R_i \\leq 0\\}}}_{\\text{Put spread}} + \\underbrace{(-30\\%) \\cdot \\mathbf{1}_{\\{R_i \\leq -30\\%\\}}}_{\\text{Plancher (barrière)}}',
+    document.getElementById('decomp-formula'), { displayMode: true }
+  );
+}
+
+function buildDecompChart() {
+  const ctx = document.getElementById('decomp-chart').getContext('2d');
+  // Digital call: 6.5% when x > 0, else 0
+  const digitalPts = [];
+  for (let x = -50; x <= 50; x += 0.5) digitalPts.push({x, y: x > 0 ? 6.5 : 0});
+  // Put spread: x when -30 < x <= 0, else 0
+  const putSpreadPts = [];
+  for (let x = -50; x <= 50; x += 0.5) putSpreadPts.push({x, y: (x > -30 && x <= 0) ? x : 0});
+  // Floor: -30 when x <= -30, else 0
+  const floorPts = [];
+  for (let x = -50; x <= 50; x += 0.5) floorPts.push({x, y: x <= -30 ? -30 : 0});
+  // Combined (the actual payoff)
+  const combinedPts = [];
+  for (let x = -50; x <= 50; x += 0.5) {
+    let y;
+    if (x > 0) y = 6.5;
+    else if (x > -30) y = x;
+    else y = -30;
+    combinedPts.push({x, y});
+  }
+
+  new Chart(ctx, {
+    type: 'scatter',
+    data: {
+      datasets: [
+        { label: 'Payoff combiné', data: combinedPts, showLine: true, pointRadius: 0, borderColor: '#2d3436', borderWidth: 2.5, borderDash: [], fill: false, order: 0 },
+        { label: 'Call numérique', data: digitalPts, showLine: true, pointRadius: 0, borderColor: '#2e7d32', borderWidth: 1.5, borderDash: [6,3], fill: false, order: 1 },
+        { label: 'Put spread', data: putSpreadPts, showLine: true, pointRadius: 0, borderColor: '#bf5600', borderWidth: 1.5, borderDash: [6,3], fill: false, order: 2 },
+        { label: 'Plancher', data: floorPts, showLine: true, pointRadius: 0, borderColor: '#b71c1c', borderWidth: 1.5, borderDash: [6,3], fill: false, order: 3 },
+      ]
+    },
+    options: {
+      responsive: true,
+      scales: {
+        x: { title: { display: true, text: 'Rendement du titre (%)' }, min: -50, max: 50 },
+        y: { title: { display: true, text: 'Contribution (%)' }, min: -40, max: 15 }
+      },
+      plugins: {
+        legend: { display: true, position: 'bottom', labels: { boxWidth: 16, font: { size: 11 } } },
+        annotation: {
+          annotations: {
+            zero: { type: 'line', yMin: 0, yMax: 0, borderColor: '#ddd8d0', borderWidth: 1 },
+          }
+        }
+      }
+    }
+  });
 }
 
 function buildPayoffChart() {

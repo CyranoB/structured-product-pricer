@@ -918,7 +918,7 @@ function copyCode(btnEl, codeId) {
     setTimeout(() => { btnEl.textContent = 'Copier'; btnEl.classList.remove('copied'); }, 2000);
   });
 }
-// Date validation removed: S0 and ST are now fixed from product terms
+const N_STOCKS = DATA.stocks.length;
 
 function payoffPerf(ret, digital=0.065, floor=-0.30) {
   if (ret > 0) return { perf: digital, regime: 'digital' };
@@ -1105,12 +1105,12 @@ function updatePayoffSlider() {
 // SECTION 5: TAB 1 – COUPON CALCULATOR
 // ═══════════════════════════════════════
 const EXAMPLES = [
-  { name: 'Exemple 1', desc: 'tous positifs', prices: [120,142,138,159,111,108,127,134,145,116], useBase100: true },
-  { name: 'Exemple 2', desc: 'mixte', prices: [101,104,92,108,104,103,97,102,101,89], useBase100: true },
-  { name: 'Exemple 3', desc: 'légèrement positifs', prices: [100.50,100.25,103.25,101,102,104,101.25,100.50,100.75,103], useBase100: true },
-  { name: 'Exemple 4', desc: 'pertes profondes', prices: [62,100.50,98,106,65,112,103,118,102,86], useBase100: true },
+  { name: 'Exemple 1', prices: [120,142,138,159,111,108,127,134,145,116] },
+  { name: 'Exemple 2', prices: [101,104,92,108,104,103,97,102,101,89] },
+  { name: 'Exemple 3', prices: [100.50,100.25,103.25,101,102,104,101.25,100.50,100.75,103] },
+  { name: 'Exemple 4', prices: [62,100.50,98,106,65,112,103,118,102,86] },
 ];
-let couponUseBase100 = true; // true for term sheet examples ($100), false for real initial prices
+let couponUseBase100 = true;
 
 function initTab1() {
   // Example buttons
@@ -1123,7 +1123,7 @@ function initTab1() {
   // Build table rows with real tickers (all content is from trusted DATA constants, not user input)
   const tbody = document.getElementById('coupon-tbody');
   tbody.innerHTML = '';
-  for (let i = 0; i < 10; i++) {
+  for (let i = 0; i < N_STOCKS; i++) {
     const s = DATA.stocks[i];
     const tr = document.createElement('tr');
     tr.innerHTML = '<td><b>'+s.ticker+'</b> <span style="color:var(--text-secondary);font-size:11px;">'+s.name+'</span></td>'+
@@ -1147,7 +1147,7 @@ function loadExample(idx) {
   couponUseBase100 = true;
   document.querySelectorAll('.example-btn').forEach((b,i) => b.classList.toggle('active', i===idx));
   const ex = EXAMPLES[idx];
-  for (let i = 0; i < 10; i++) {
+  for (let i = 0; i < N_STOCKS; i++) {
     document.getElementById('cc-init-'+i).textContent = '$100.00';
     document.getElementById('cc-final-'+i).value = ex.prices[i];
   }
@@ -1157,7 +1157,7 @@ function loadExample(idx) {
 function switchToRealPrices() {
   couponUseBase100 = false;
   document.querySelectorAll('.example-btn').forEach((b,i) => b.classList.toggle('active', i === EXAMPLES.length));
-  for (let i = 0; i < 10; i++) {
+  for (let i = 0; i < N_STOCKS; i++) {
     const s = DATA.stocks[i];
     // Use adjusted prices for both initial and final (consistent basis after splits/dividends)
     document.getElementById('cc-init-'+i).textContent = fmtMoney(s.initial_price_adj);
@@ -1169,7 +1169,7 @@ function switchToRealPrices() {
 function recalcCoupon() {
   const returns = [];
   let anyEmpty = false;
-  for (let i = 0; i < 10; i++) {
+  for (let i = 0; i < N_STOCKS; i++) {
     const initPrice = couponUseBase100 ? 100 : DATA.stocks[i].initial_price_adj;
     const val = document.getElementById('cc-final-'+i).value;
     if (val === '' || isNaN(parseFloat(val))) {
@@ -1194,7 +1194,7 @@ function recalcCoupon() {
     // Still update rows that have values
     const validReturns = returns.map(r => r === null ? 0 : r);
     const result = computeCoupon(validReturns);
-    for (let i = 0; i < 10; i++) {
+    for (let i = 0; i < N_STOCKS; i++) {
       if (returns[i] === null) continue;
       const r = result.rows[i];
       document.getElementById('cc-ret-'+i).textContent = fmtPct(r.ret);
@@ -1207,7 +1207,7 @@ function recalcCoupon() {
     return;
   }
   const result = computeCoupon(returns);
-  for (let i = 0; i < 10; i++) {
+  for (let i = 0; i < N_STOCKS; i++) {
     const r = result.rows[i];
     document.getElementById('cc-ret-'+i).textContent = fmtPct(r.ret);
     // Content from trusted computeCoupon output
@@ -1236,6 +1236,7 @@ function initTab2() {
 
   // Build toggles and datasets
   const datasets = [];
+  let togglesHtml = '';
   DATA.stocks.forEach((s, i) => {
     stockVisible[s.ticker] = true;
     const prices = DATA.price_history.prices[s.ticker];
@@ -1250,8 +1251,9 @@ function initTab2() {
       pointRadius: 0,
       tension: 0.1,
     });
-    togglesEl.innerHTML += '<div class="stock-toggle active" id="toggle-'+s.ticker+'" onclick="toggleStock(\''+s.ticker+'\','+i+')" style="border-color:'+STOCK_COLORS[i]+'"><span class="stock-dot" style="background:'+STOCK_COLORS[i]+'"></span>'+s.ticker+'</div>';
+    togglesHtml += '<div class="stock-toggle active" id="toggle-'+s.ticker+'" onclick="toggleStock(\''+s.ticker+'\','+i+')" style="border-color:'+STOCK_COLORS[i]+'"><span class="stock-dot" style="background:'+STOCK_COLORS[i]+'"></span>'+s.ticker+'</div>';
   });
+  togglesEl.innerHTML = togglesHtml;
 
   // Subsample labels for readability
   const labelStep = Math.ceil(dates.length / 20);
@@ -1408,8 +1410,11 @@ function mulberry32(seed) {
 }
 
 let rngFn = Math.random;
+let _normalSpare = null;
+let _hasSpare = false;
 
 function normalRandom() {
+  if (_hasSpare) { _hasSpare = false; return _normalSpare; }
   let u, v, s;
   do {
     u = rngFn() * 2 - 1;
@@ -1417,6 +1422,8 @@ function normalRandom() {
     s = u * u + v * v;
   } while (s >= 1 || s === 0);
   const mul = Math.sqrt(-2 * Math.log(s) / s);
+  _normalSpare = v * mul;
+  _hasSpare = true;
   return u * mul;
 }
 
@@ -1466,10 +1473,8 @@ function mc_run() {
   const S0 = stocks.map(s => s.s0_price);
   const initP = stocks.map(s => s.initial_price_adj);
 
-  // Results storage
+  const weight = 1 / n;
   const couponPayments = new Float64Array(nSim);
-  const sampleEndpoints = []; // first 200 sims, store final prices
-  // Store ALL endpoints per stock for histogram (10 arrays of N floats)
   const allEndpoints = Array.from({length: n}, () => new Float64Array(nSim));
   const convergencePts = [];
   let runningSum = 0;
@@ -1481,47 +1486,43 @@ function mc_run() {
   btn.disabled = true;
   progress.style.display = 'block';
   progress.value = 0;
+  _hasSpare = false;
 
   const t0 = performance.now();
   let completed = 0;
   const batchSize = 1000;
 
+  // Hoisted arrays -- reused across iterations to avoid GC pressure
+  const Z = new Float64Array(n);
+  const Zcorr = new Float64Array(n);
+
   function processBatch() {
     const batchEnd = Math.min(completed + batchSize, nSim);
     for (let sim = completed; sim < batchEnd; sim++) {
-      // Generate 10 independent normals
-      const Z = new Float64Array(n);
       for (let i = 0; i < n; i++) Z[i] = normalRandom();
 
-      // Apply Cholesky
-      const Zcorr = new Float64Array(n);
       for (let i = 0; i < n; i++) {
         let sum = 0;
         for (let j = 0; j <= i; j++) sum += L[i][j] * Z[j];
         Zcorr[i] = sum;
       }
 
-      // Simulate final prices & compute payoff
       let weightedPerf = 0;
-      const finals = new Float64Array(n);
       for (let i = 0; i < n; i++) {
         const ST = S0[i] * Math.exp(drift[i] + diffusion[i] * Zcorr[i]);
-        finals[i] = ST;
+        allEndpoints[i][sim] = ST;
         const ret = (ST - initP[i]) / initP[i];
         let perf;
         if (ret > 0) perf = digital;
         else if (ret > floor) perf = ret;
         else perf = floor;
-        weightedPerf += perf * 0.10;
+        weightedPerf += perf * weight;
       }
       const couponRate = Math.min(digital, Math.max(0, weightedPerf));
-      const payment = 1000 * couponRate;
+      const payment = DATA.product.denomination * couponRate;
       couponPayments[sim] = payment;
       runningSum += payment;
       runningSumSq += payment * payment;
-
-      for (let i = 0; i < n; i++) allEndpoints[i][sim] = finals[i];
-      if (sim < 200) sampleEndpoints.push(Array.from(finals));
 
       // Convergence points (every 100 sims)
       if ((sim + 1) % 100 === 0 || sim === nSim - 1) {
@@ -1546,15 +1547,14 @@ function mc_run() {
       const std = Math.sqrt(Math.max(0, variance));
       const ci95 = 1.96 * std / Math.sqrt(nSim);
       const pvCoupons = meanPayment * discountFactor;
-      const pvPrincipal = 1000 * discountFactor;
+      const pvPrincipal = DATA.product.denomination * discountFactor;
       const cdPrice = pvCoupons + pvPrincipal;
 
       mcResults = {
         nSim, deltaT, r, elapsed,
         meanPayment, std, ci95,
         pvCoupons, pvPrincipal, cdPrice,
-        couponPayments: Array.from(couponPayments),
-        sampleEndpoints,
+        couponPayments,
         allEndpoints,
         convergencePts,
       };
@@ -1689,13 +1689,16 @@ function mc_drawConvergence() {
 function mc_drawEndpoints() {
   const ticker = document.getElementById('mc-stock-select').value;
   const idx = DATA.stocks.findIndex(s => s.ticker === ticker);
-  const allST = Array.from(mcResults.allEndpoints[idx]);
+  const allST = mcResults.allEndpoints[idx]; // Float64Array, no copy needed
   const s0 = DATA.stocks[idx].s0_price;
   const initP = DATA.stocks[idx].initial_price_adj;
 
-  // Build histogram bins
-  const minST = Math.min(...allST);
-  const maxST = Math.max(...allST);
+  // Find min/max with loop (spread operator risks stack overflow at 50k elements)
+  let minST = Infinity, maxST = -Infinity;
+  for (let i = 0; i < allST.length; i++) {
+    if (allST[i] < minST) minST = allST[i];
+    if (allST[i] > maxST) maxST = allST[i];
+  }
   const nBins = 40;
   const binWidth = (maxST - minST) / nBins;
   const bins = [];

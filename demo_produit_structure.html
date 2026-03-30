@@ -515,7 +515,7 @@ tr:hover { background: var(--teal-light); }
     <h2>Simulation de Monte Carlo</h2>
     <div class="formula-box" id="gbm-formula"></div>
     <p style="font-size:13px;color:var(--text-secondary);margin:16px 0 20px;">
-      On simule N trajectoires de prix via le mouvement brownien géométrique avec rendements corrélés (décomposition de Cholesky). La dérive risque-neutre inclut le taux sans risque r, le rendement en dividendes q<sub>i</sub>, et le terme de correction de convexité σ²/2.
+      On simule N trajectoires de prix via le mouvement brownien géométrique avec rendements corrélés (décomposition de Cholesky). Les prix ajustés intègrent déjà les dividendes, donc la dérive risque-neutre est simplement (r - σ²/2).
     </p>
     <div class="mc-config">
       <div class="mc-field">
@@ -616,23 +616,22 @@ Simulations       : 10000</code></pre>
           Les deux fonctions (<code>simuler_gbm</code> et <code>calculer_payoff</code>) sont appelées automatiquement par le script principal. Elles peuvent aussi être utilisées séparément :
         </p>
         <pre style="background:var(--charcoal);color:#e0e0e0;padding:12px 16px;border-radius:3px;font-family:var(--font-mono);font-size:12px;line-height:1.5;margin-top:8px;"><code>% Appel direct des fonctions :
-S_final = simuler_gbm(S0, sigma, q, CorrMat, r, T, N);
+S_final = simuler_gbm(S0, sigma, CorrMat, r, T, N);
 [PrixCD, CouponMoyen, IC95, Payoffs] = calculer_payoff(S_final, S_init, 0.065, -0.30, 1000, r, T);</code></pre>
       </div>
       <div class="code-header">
         <h3>simuler_gbm.m <span style="font-weight:400;color:var(--text-secondary);font-size:12px;">— Simulation GBM avec Cholesky</span></h3>
         <button class="copy-btn" onclick="copyCode(this,'code-simuler')">Copier</button>
       </div>
-      <pre style="background:var(--charcoal);color:#e0e0e0;padding:20px;border-radius:3px;font-family:var(--font-mono);font-size:11px;line-height:1.6;overflow-x:auto;margin-top:8px;"><code id="code-simuler">function S_final = simuler_gbm(S0, sigma, q, CorrMat, r, T, N)
+      <pre style="background:var(--charcoal);color:#e0e0e0;padding:20px;border-radius:3px;font-family:var(--font-mono);font-size:11px;line-height:1.6;overflow-x:auto;margin-top:8px;"><code id="code-simuler">function S_final = simuler_gbm(S0, sigma, CorrMat, r, T, N)
 % SIMULER_GBM  Simule N prix terminaux pour un panier d'actions corrélées
 %   via le mouvement brownien géométrique sous la mesure risque-neutre.
 %
-%   S_final = simuler_gbm(S0, sigma, q, CorrMat, r, T, N)
+%   S_final = simuler_gbm(S0, sigma, CorrMat, r, T, N)
 %
 %   Entrées :
-%     S0      - vecteur [K x 1] des prix actuels (date d'évaluation)
-%     sigma   - vecteur [K x 1] des volatilités annualisées
-%     q       - vecteur [K x 1] des rendements en dividendes (annualisés)
+%     S0      - vecteur [K x 1] des prix actuels (prix ajustés, date d'évaluation)
+%     sigma   - vecteur [K x 1] des volatilités annualisées (calculées sur prix ajustés)
 %     CorrMat - matrice [K x K] de corrélation des rendements
 %     r       - taux sans risque (scalaire)
 %     T       - horizon de simulation en années (scalaire)
@@ -641,8 +640,11 @@ S_final = simuler_gbm(S0, sigma, q, CorrMat, r, T, N);
 %   Sortie :
 %     S_final - matrice [K x N] des prix terminaux simulés
 %
+%   Note : Les prix ajustés intègrent déjà les dividendes, donc la
+%   dérive risque-neutre est (r - sigma^2/2), sans terme q.
+%
 %   Formule GBM (un seul pas, mesure risque-neutre) :
-%     S_T = S0 * exp((r - q - sigma^2/2)*T + sigma*sqrt(T)*Z)
+%     S_T = S0 * exp((r - sigma^2/2)*T + sigma*sqrt(T)*Z)
 %   où Z = L * X, avec L = chol(CorrMat) et X ~ N(0,I)
 
     K = length(S0);
@@ -653,8 +655,8 @@ S_final = simuler_gbm(S0, sigma, q, CorrMat, r, T, N);
     L = chol(CorrMat, 'lower');
 
     % --- Dérive risque-neutre ---
-    % Sous la mesure Q, le drift est (r - q_i - sigma_i^2/2)
-    drift = (r - q - 0.5 * sigma.^2) * T;     % [K x 1]
+    % Pas de q car les prix ajustés intègrent déjà les dividendes
+    drift = (r - 0.5 * sigma.^2) * T;             % [K x 1]
 
     % --- Génération des chocs corrélés ---
     Z_indep = randn(K, N);                     % [K x N] normales indépendantes
@@ -757,8 +759,7 @@ S0 = [31.05; 57.79; 14.56; 16.87; 159.39; 114.51; 79.61; 115.52; 85.37; 29.80];
 % Volatilités annualisées
 sigma = [0.3392; 0.6552; 0.5156; 0.3334; 0.1514; 0.2158; 0.3070; 0.1810; 0.2425; 0.1876];
 
-% Rendements en dividendes
-q = [0.0192; 0.0063; 0.0725; 0.0352; 0.0269; 0.0272; 0.0188; 0.0350; 0.0328; 0.0284];
+% Note : pas de vecteur q (dividendes) car les prix ajustés les intègrent déjà
 
 % Matrice de corrélation (rendements log hebdomadaires, 564 obs.)
 CorrMat = [
@@ -774,7 +775,7 @@ CorrMat = [
   0.2156 0.2176 0.3214 0.2874 0.4415 0.4048 0.4714 0.3065 0.3800 1.0000];
 
 %% 3. SIMULATION
-S_final = simuler_gbm(S0, sigma, q, CorrMat, r, T, N);
+S_final = simuler_gbm(S0, sigma, CorrMat, r, T, N);
 
 %% 4. ÉVALUATION
 [PrixCD, CouponMoyen, IC95, Payoffs] = calculer_payoff( ...
@@ -1309,7 +1310,7 @@ let mcResults = null;
 function initTab3() {
   // Render GBM formula
   katex.render(
-    'S_{i,T} = S_{i,0} \\cdot \\exp\\!\\left[\\left(r - q_i - \\frac{\\sigma_i^2}{2}\\right)\\Delta t + \\sigma_i\\sqrt{\\Delta t}\\, Z_i\\right]',
+    'S_{i,T} = S_{i,0} \\cdot \\exp\\!\\left[\\left(r - \\frac{\\sigma_i^2}{2}\\right)\\Delta t + \\sigma_i\\sqrt{\\Delta t}\\, Z_i\\right]',
     document.getElementById('gbm-formula'),
     { displayMode: true }
   );
@@ -1437,7 +1438,8 @@ function mc_run() {
   const digital = DATA.product.digital_coupon;
   const floor = DATA.product.floor;
 
-  const drift = stocks.map(s => (r - (s.div_yield || 0) - s.annualized_vol * s.annualized_vol / 2) * deltaT);
+  // Drift: r - σ²/2 (no q_i because S0 and vol are from adjusted prices which already incorporate dividends)
+  const drift = stocks.map(s => (r - s.annualized_vol * s.annualized_vol / 2) * deltaT);
   const diffusion = stocks.map(s => s.annualized_vol * sqrtDeltaT);
   const S0 = stocks.map(s => s.s0_price);
   const initP = stocks.map(s => s.initial_price_adj);
@@ -1445,6 +1447,8 @@ function mc_run() {
   // Results storage
   const couponPayments = new Float64Array(nSim);
   const sampleEndpoints = []; // first 200 sims, store final prices
+  // Store ALL endpoints per stock for histogram (10 arrays of N floats)
+  const allEndpoints = Array.from({length: n}, () => new Float64Array(nSim));
   const convergencePts = [];
   let runningSum = 0;
   let runningSumSq = 0;
@@ -1494,6 +1498,7 @@ function mc_run() {
       runningSum += payment;
       runningSumSq += payment * payment;
 
+      for (let i = 0; i < n; i++) allEndpoints[i][sim] = finals[i];
       if (sim < 200) sampleEndpoints.push(Array.from(finals));
 
       // Convergence points (every 100 sims)
@@ -1528,6 +1533,7 @@ function mc_run() {
         pvCoupons, pvPrincipal, cdPrice,
         couponPayments: Array.from(couponPayments),
         sampleEndpoints,
+        allEndpoints,
         convergencePts,
       };
 
@@ -1655,24 +1661,42 @@ function mc_drawConvergence() {
 function mc_drawEndpoints() {
   const ticker = document.getElementById('mc-stock-select').value;
   const idx = DATA.stocks.findIndex(s => s.ticker === ticker);
-  const endpoints = mcResults.sampleEndpoints.map(ep => ep[idx]);
+  const allST = Array.from(mcResults.allEndpoints[idx]);
   const s0 = DATA.stocks[idx].s0_price;
   const initP = DATA.stocks[idx].initial_price_adj;
 
+  // Build histogram bins
+  const minST = Math.min(...allST);
+  const maxST = Math.max(...allST);
+  const nBins = 40;
+  const binWidth = (maxST - minST) / nBins;
+  const bins = [];
+  const counts = new Array(nBins).fill(0);
+  for (let i = 0; i < nBins; i++) {
+    bins.push(minST + (i + 0.5) * binWidth);
+  }
+  for (const st of allST) {
+    const idx2 = Math.min(Math.floor((st - minST) / binWidth), nBins - 1);
+    counts[idx2]++;
+  }
+  const labels = bins.map(b => '$' + b.toFixed(1));
+
+  // Color each bin based on whether it's above or below initP
+  const colors = bins.map(b => {
+    const ret = (b - initP) / initP;
+    if (ret > 0) return '#2e7d32';
+    if (ret > -0.30) return '#bf5600';
+    return '#b71c1c';
+  });
+
   if (mcEndChart) mcEndChart.destroy();
   mcEndChart = new Chart(document.getElementById('mc-endpoints'), {
-    type: 'scatter',
+    type: 'bar',
     data: {
+      labels,
       datasets: [{
-        label: 'S_T simulé',
-        data: endpoints.map((st, i) => ({ x: i, y: st })),
-        pointRadius: 2,
-        pointBackgroundColor: endpoints.map(st => {
-          const ret = (st - initP) / initP;
-          if (ret > 0) return '#2e7d32';
-          if (ret > -0.30) return '#bf5600';
-          return '#b71c1c';
-        }),
+        data: counts,
+        backgroundColor: colors,
       }]
     },
     options: {
@@ -1681,14 +1705,13 @@ function mc_drawEndpoints() {
         legend: { display: false },
         annotation: {
           annotations: {
-            s0Line: { type: 'line', yMin: s0, yMax: s0, borderColor: '#00838f', borderWidth: 1.5, borderDash: [6,3], label: { display: true, content: 'S₀ = $'+fmt(s0), position: 'start', font: {size: 11, family: 'Georgia'} } },
-            initLine: { type: 'line', yMin: initP, yMax: initP, borderColor: '#636e72', borderWidth: 1, borderDash: [4,4], label: { display: true, content: 'P₀ initial = $'+fmt(initP), position: 'end', font: {size: 10, family: 'Georgia'} } },
+            s0Line: { type: 'line', xMin: labels.findIndex(l => parseFloat(l.slice(1)) >= s0), xMax: labels.findIndex(l => parseFloat(l.slice(1)) >= s0), borderColor: '#00838f', borderWidth: 2, borderDash: [6,3], label: { display: true, content: 'S₀', position: 'start', font: {size: 10, family: 'Georgia'} } },
           }
         }
       },
       scales: {
-        x: { title: { display: true, text: 'Scénario #' } },
-        y: { title: { display: true, text: ticker + ' – Prix simulé S_T ($)' } }
+        x: { title: { display: true, text: ticker + ' – Prix terminal S_T ($)' }, ticks: { maxRotation: 45, autoSkip: true, maxTicksLimit: 12 } },
+        y: { title: { display: true, text: 'Fréquence' } }
       }
     }
   });

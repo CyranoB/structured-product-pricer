@@ -594,9 +594,31 @@ tr:hover { background: var(--teal-light); }
       Code Matlab : Cholesky & Monte Carlo
     </button>
     <p style="font-size:12px;color:var(--text-secondary);margin-bottom:8px;">
-      Trois fichiers Matlab : deux fonctions réutilisables + un script principal. Copier chaque bloc dans son propre fichier <code>.m</code>.
+      Trois fichiers Matlab : deux fonctions réutilisables + un script principal.
     </p>
     <div class="collapsible-content" id="matlab-content">
+      <div style="background:var(--cream);border:1px solid var(--border-light);border-radius:3px;padding:20px;margin-bottom:20px;">
+        <h3 style="margin-top:0;">Comment exécuter</h3>
+        <ol style="font-size:13px;line-height:1.8;padding-left:20px;color:var(--text);">
+          <li>Créer les 3 fichiers ci-dessous dans le <b>même dossier</b> Matlab</li>
+          <li>Ouvrir <code>evaluer_cd.m</code> dans l'éditeur Matlab</li>
+          <li>Cliquer <b>Run</b> (ou taper <code>evaluer_cd</code> dans la console)</li>
+        </ol>
+        <pre style="background:var(--charcoal);color:#e0e0e0;padding:12px 16px;border-radius:3px;font-family:var(--font-mono);font-size:12px;line-height:1.5;margin-top:12px;"><code>% Dans la console Matlab :
+>> evaluer_cd
+
+=== RÉSULTAT ===
+Prix estimé du CD : 1036.49 $
+Coupon moyen      : 48.44 $
+IC 95%            : [1035.62, 1037.36]
+Simulations       : 10000</code></pre>
+        <p style="font-size:12px;color:var(--text-secondary);margin-top:12px;">
+          Les deux fonctions (<code>simuler_gbm</code> et <code>calculer_payoff</code>) sont appelées automatiquement par le script principal. Elles peuvent aussi être utilisées séparément :
+        </p>
+        <pre style="background:var(--charcoal);color:#e0e0e0;padding:12px 16px;border-radius:3px;font-family:var(--font-mono);font-size:12px;line-height:1.5;margin-top:8px;"><code>% Appel direct des fonctions :
+S_final = simuler_gbm(S0, sigma, q, CorrMat, r, T, N);
+[PrixCD, CouponMoyen, IC95, Payoffs] = calculer_payoff(S_final, S_init, 0.065, -0.30, 1000, r, T);</code></pre>
+      </div>
       <div class="code-header">
         <h3>simuler_gbm.m <span style="font-weight:400;color:var(--text-secondary);font-size:12px;">— Simulation GBM avec Cholesky</span></h3>
         <button class="copy-btn" onclick="copyCode(this,'code-simuler')">Copier</button>

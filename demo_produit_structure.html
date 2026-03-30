@@ -352,6 +352,26 @@ tr:hover { background: var(--teal-light); }
   margin: 20px 0;
 }
 
+/* Section numbers */
+.card h2 .section-num {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--teal);
+  margin-right: 8px;
+  font-weight: 600;
+}
+/* Copy results button */
+.copy-results-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 14px; border: 1px solid rgba(255,255,255,0.3); color: white;
+  background: none; border-radius: 2px; cursor: pointer; font-size: 11px;
+  font-family: var(--font-sans); margin-top: 12px; transition: all 0.2s;
+}
+.copy-results-btn:hover { background: rgba(255,255,255,0.15); }
+/* Toggle hint */
+.toggle-hint { font-size: 11px; color: var(--text-tertiary); margin-bottom: 8px; }
+
 @media (max-width: 768px) {
   .container { padding: 0 20px; }
   .payoff-container { grid-template-columns: 1fr; }
@@ -388,18 +408,18 @@ tr:hover { background: var(--teal-light); }
 <!-- ═══════════════════════════════════════ -->
 <div class="tab-page active" id="tab-0">
   <div class="card">
-    <h2>Résumé du produit</h2>
+    <h2><span class="section-num">1.</span>Résumé du produit</h2>
     <div class="product-grid" id="product-grid"></div>
   </div>
   <div class="card">
-    <h2>Panier de titres sous-jacents</h2>
+    <h2><span class="section-num">2.</span>Panier de titres sous-jacents</h2>
     <table id="basket-table">
       <thead><tr><th>Titre</th><th>Ticker</th><th>Bourse</th><th class="num">Prix initial (26/09/2011)</th><th class="num">Pondération</th></tr></thead>
       <tbody id="basket-tbody"></tbody>
     </table>
   </div>
   <div class="card">
-    <h2>Fonction de performance par titre</h2>
+    <h2><span class="section-num">3.</span>Fonction de performance par titre</h2>
     <p style="font-size:13px;color:var(--text-secondary);margin-bottom:12px;">Pour chaque titre, à chaque date d'observation, la performance est déterminée selon trois régimes :</p>
     <div class="payoff-container">
       <div>
@@ -432,7 +452,7 @@ tr:hover { background: var(--teal-light); }
     <div class="formula-box" id="payoff-formula"></div>
   </div>
   <div class="card">
-    <h2>Décomposition en options exotiques</h2>
+    <h2><span class="section-num">4.</span>Décomposition en options exotiques</h2>
     <p style="font-size:13px;color:var(--text-secondary);margin-bottom:16px;">
       La fonction de performance par titre se décompose en briques élémentaires d'options exotiques. Cette décomposition justifie l'utilisation de la simulation de Monte Carlo pour l'évaluation.
     </p>
@@ -488,6 +508,7 @@ tr:hover { background: var(--teal-light); }
 <div class="tab-page" id="tab-2">
   <div class="card">
     <h2>Historique des prix (normalisé, base 100)</h2>
+    <div class="toggle-hint">Cliquer sur un titre pour le masquer/afficher</div>
     <div class="chart-controls" id="stock-toggles"></div>
     <canvas id="price-chart" height="420"></canvas>
   </div>
@@ -909,6 +930,28 @@ function toggleCollapsible(id) {
   toggle.classList.toggle('open');
   content.classList.toggle('open');
 }
+function copyResults() {
+  const res = mcResults;
+  const text = [
+    'Évaluation du CD Numérique Annuel (MATH40602)',
+    '='.repeat(48),
+    'Prix estimé : ' + fmtMoney(res.cdPrice),
+    'Coupon moyen : ' + fmtMoney(res.meanPayment) + ' ± ' + fmtMoney(res.ci95) + ' (IC 95%)',
+    'VP coupons : ' + fmtMoney(res.pvCoupons),
+    'VP principal : ' + fmtMoney(res.pvPrincipal),
+    '',
+    'Paramètres :',
+    '  N = ' + res.nSim.toLocaleString() + ' simulations',
+    '  Δt = ' + fmt(res.deltaT, 4) + ' ans (11/12)',
+    '  r = ' + fmtPct(res.r),
+    '  Durée calcul : ' + res.elapsed + 's',
+  ].join('\n');
+  navigator.clipboard.writeText(text).then(() => {
+    const btn = document.querySelector('.copy-results-btn');
+    btn.textContent = 'Copié !';
+    setTimeout(() => { btn.textContent = 'Copier le résumé'; }, 2000);
+  });
+}
 function copyCode(btnEl, codeId) {
   const codeEl = document.getElementById(codeId);
   const text = codeEl.textContent;
@@ -957,6 +1000,7 @@ function initTab0() {
     ['Durée', p.term_years + ' ans'],
     ['Date d\'émission', fmtDateFr(p.issue_date)],
     ['Échéance', fmtDateFr(p.maturity_date)],
+    ['Date d\'évaluation', fmtDateFr(p.default_eval_date)],
     ['Dénomination', fmtMoney(p.denomination)],
     ['Coupon numérique', fmtPct(p.digital_coupon)],
     ['Plancher', fmtPct(p.floor)],
@@ -1586,7 +1630,8 @@ function mc_displayResults() {
     '<div class="price">'+fmtMoney(res.cdPrice)+'</div>'+
     '<div class="ci">Coupon moyen : '+fmtMoney(res.meanPayment)+' ± '+fmtMoney(res.ci95)+' (IC 95%)</div>'+
     '<div class="detail">'+res.nSim.toLocaleString()+' simulations · Δt = '+fmt(res.deltaT,4)+' ans · r = '+fmtPct(res.r)+' · '+res.elapsed+'s</div>'+
-    '<div class="detail" style="margin-top:4px;">VP coupons = '+fmtMoney(res.pvCoupons)+' + VP principal = '+fmtMoney(res.pvPrincipal)+'</div>';
+    '<div class="detail" style="margin-top:4px;">VP coupons = '+fmtMoney(res.pvCoupons)+' + VP principal = '+fmtMoney(res.pvPrincipal)+'</div>'+
+    '<button class="copy-results-btn" onclick="copyResults()">Copier le résumé</button>';
 
   // Coupon moyen formula
   katex.render(
@@ -1679,7 +1724,7 @@ function mc_drawConvergence() {
       responsive: true,
       plugins: { legend: { display: true, position: 'bottom', labels: { boxWidth: 12 } } },
       scales: {
-        x: { title: { display: true, text: 'Nombre de simulations' }, ticks: { callback: v => v >= 1000 ? (v/1000)+'k' : v } },
+        x: { title: { display: true, text: 'Nombre de simulations' }, ticks: { callback: function(val, idx) { const n = pts[idx] ? pts[idx].n : val; return n >= 1000 ? (n/1000)+'k' : n; }, autoSkip: true, maxTicksLimit: 10 } },
         y: { title: { display: true, text: 'Coupon moyen ($)' } }
       }
     }

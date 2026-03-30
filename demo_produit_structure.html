@@ -823,6 +823,28 @@ grid on;</code></pre>
 
   <div id="mc-results-section" style="display:none;">
     <div class="mc-price-card" id="mc-price-card"></div>
+    <div class="card" style="margin-top:20px;">
+      <h2>Comment le coupon moyen est calculé</h2>
+      <div style="display:grid;grid-template-columns:auto 1fr;gap:12px 16px;font-size:13px;line-height:1.7;">
+        <div style="font-family:var(--font-serif);color:var(--teal);font-weight:600;">Étape 1</div>
+        <div>Pour chaque simulation <i>k</i> = 1, ..., N, on génère les prix terminaux S<sub>i,T</sub> des 10 titres via le GBM corrélé (Cholesky).</div>
+        <div style="font-family:var(--font-serif);color:var(--teal);font-weight:600;">Étape 2</div>
+        <div>On calcule le rendement de chaque titre par rapport au prix initial de 2011 : R<sub>i</sub> = (S<sub>i,T</sub> − S<sub>i,init</sub>) / S<sub>i,init</sub></div>
+        <div style="font-family:var(--font-serif);color:var(--teal);font-weight:600;">Étape 3</div>
+        <div>On applique les règles du produit pour obtenir la performance par titre :
+          <span style="color:var(--green);">R<sub>i</sub> &gt; 0 → 6,50%</span> ·
+          <span style="color:var(--orange);">−30% &lt; R<sub>i</sub> ≤ 0 → R<sub>i</sub></span> ·
+          <span style="color:var(--red);">R<sub>i</sub> ≤ −30% → −30%</span></div>
+        <div style="font-family:var(--font-serif);color:var(--teal);font-weight:600;">Étape 4</div>
+        <div>On calcule le taux du coupon pour cette simulation : Taux<sub>k</sub> = max(0, moyenne des 10 performances)</div>
+        <div style="font-family:var(--font-serif);color:var(--teal);font-weight:600;">Étape 5</div>
+        <div>Le paiement de cette simulation est : Payoff<sub>k</sub> = 1000 + 1000 × Taux<sub>k</sub></div>
+      </div>
+      <div class="formula-box" style="margin-top:16px;" id="coupon-moyen-formula"></div>
+      <p style="font-size:12px;color:var(--text-secondary);margin-top:12px;">
+        Le coupon moyen est la moyenne arithmétique des paiements de coupon sur les N simulations. Le prix du CD est la valeur actualisée de l'espérance du payoff total (principal + coupon).
+      </p>
+    </div>
     <div class="mc-results" style="margin-top:20px;">
       <div class="card">
         <h2>Distribution des paiements de coupon</h2>
@@ -1565,6 +1587,12 @@ function mc_displayResults() {
     '<div class="ci">Coupon moyen : '+fmtMoney(res.meanPayment)+' ± '+fmtMoney(res.ci95)+' (IC 95%)</div>'+
     '<div class="detail">'+res.nSim.toLocaleString()+' simulations · Δt = '+fmt(res.deltaT,4)+' ans · r = '+fmtPct(res.r)+' · '+res.elapsed+'s</div>'+
     '<div class="detail" style="margin-top:4px;">VP coupons = '+fmtMoney(res.pvCoupons)+' + VP principal = '+fmtMoney(res.pvPrincipal)+'</div>';
+
+  // Coupon moyen formula
+  katex.render(
+    '\\overline{\\text{Coupon}} = \\frac{1}{N}\\sum_{k=1}^{N} 1000 \\times \\text{Taux}_k \\qquad \\text{Prix}_{\\text{CD}} = e^{-rT} \\times \\frac{1}{N}\\sum_{k=1}^{N} \\text{Payoff}_k',
+    document.getElementById('coupon-moyen-formula'), { displayMode: true }
+  );
 
   // Histogram
   mc_drawHistogram();

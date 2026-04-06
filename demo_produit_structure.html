@@ -660,7 +660,13 @@ C            1.6656
 Prix estimé du CD : 1036.49 $
 Coupon moyen      : 48.44 $
 IC 95%            : [1035.62, 1037.36]
-Simulations       : 10000</code></pre>
+Simulations       : 10000
+
+=== COMPARAISON CD vs PORTEFEUILLE DIRECT ===
+CD      : E[valeur] = 1050.09 $, P(perte) = 0.0%
+Actions : E[valeur] = 1011.44 $, P(perte) = 53.0%
+CD      : VaR 5% = 1000.00 $
+Actions : VaR 5% = 862.37 $</code></pre>
         <p style="font-size:12px;color:var(--text-secondary);margin-top:12px;">
           Les deux fonctions (<code>simuler_gbm</code> et <code>calculer_payoff</code>) sont appelées automatiquement par le script principal. Elles peuvent aussi être utilisées séparément :
         </p>
@@ -881,7 +887,33 @@ xlabel('Nombre de simulations');
 ylabel('Prix estimé ($)');
 title('Convergence de l''estimateur Monte Carlo');
 legend('Prix moyen', 'IC 95%', 'Location', 'best');
-grid on;</code></pre>
+grid on;
+
+%% 10. COMPARAISON : CD NUM&Eacute;RIQUE VS PORTEFEUILLE DIRECT
+K = length(S0);
+PortfolioValue = sum(S_final ./ S0) * (Nominal / K);
+CDValue = Payoffs;
+
+fprintf('\n=== COMPARAISON CD vs PORTEFEUILLE DIRECT ===\n');
+fprintf('CD      : E[valeur] = %.2f $, P(perte) = %.1f%%\n', mean(CDValue), 100*mean(CDValue &lt; Nominal));
+fprintf('Actions : E[valeur] = %.2f $, P(perte) = %.1f%%\n', mean(PortfolioValue), 100*mean(PortfolioValue &lt; Nominal));
+
+% Histogramme overlay
+figure;
+edges = linspace(min([CDValue, PortfolioValue]), max([CDValue, PortfolioValue]), 50);
+histogram(CDValue, edges, 'FaceColor', [0 0.52 0.56], 'FaceAlpha', 0.6, 'DisplayName', 'CD');
+hold on;
+histogram(PortfolioValue, edges, 'FaceColor', [0.18 0.20 0.21], 'FaceAlpha', 0.4, 'DisplayName', 'Actions');
+xline(Nominal, '--', 'Seuil', 'Color', [0.75 0.34 0], 'LineWidth', 1.5);
+legend('Location', 'best'); grid on;
+
+% CDF
+figure;
+pct = (1:N) / N;
+plot(sort(CDValue), pct, '-', 'Color', [0 0.52 0.56], 'LineWidth', 2); hold on;
+plot(sort(PortfolioValue), pct, '--', 'Color', [0.18 0.20 0.21], 'LineWidth', 2);
+xline(Nominal, ':'); yline(0.05, ':', 'VaR 5%');
+legend('CD', 'Actions', 'Location', 'southeast'); grid on;</code></pre>
     </div>
   </div>
 

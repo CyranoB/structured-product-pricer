@@ -143,3 +143,58 @@ ylabel('Prix estimé ($)');
 title('Convergence de l''estimateur Monte Carlo');
 legend('Prix moyen', 'IC 95%', 'Location', 'best');
 grid on;
+
+%% 10. COMPARAISON : CD NUMÉRIQUE VS PORTEFEUILLE DIRECT
+% Même investissement de 1000 $, réparti également entre les 10 titres
+K = length(S0);
+% S_final./S0 : rendement relatif [K x N], sum → [1 x N], * 100 → valeur par titre
+PortfolioValue = sum(S_final ./ S0) * (Nominal / K);   % [1 x N]
+CDValue = Payoffs;                                       % [1 x N] = Nominal + coupon
+
+% Statistiques
+fprintf('\n=== COMPARAISON CD vs PORTEFEUILLE DIRECT ===\n');
+fprintf('CD      : E[valeur] = %.2f $, σ = %.2f $, P(perte) = %.1f%%\n', ...
+    mean(CDValue), std(CDValue), 100*mean(CDValue < Nominal));
+fprintf('Actions : E[valeur] = %.2f $, σ = %.2f $, P(perte) = %.1f%%\n', ...
+    mean(PortfolioValue), std(PortfolioValue), 100*mean(PortfolioValue < Nominal));
+
+% VaR 5%
+CDSorted = sort(CDValue);
+StSorted = sort(PortfolioValue);
+idx5 = floor(0.05 * N);
+fprintf('CD      : VaR 5%% = %.2f $\n', CDSorted(idx5));
+fprintf('Actions : VaR 5%% = %.2f $\n', StSorted(idx5));
+
+% --- Histogramme overlay ---
+figure;
+edges = linspace(min([CDValue, PortfolioValue]), ...
+                 max([CDValue, PortfolioValue]), 50);
+histogram(CDValue, edges, 'FaceColor', [0 0.52 0.56], ...
+    'FaceAlpha', 0.6, 'DisplayName', 'CD numérique');
+hold on;
+histogram(PortfolioValue, edges, 'FaceColor', [0.18 0.20 0.21], ...
+    'FaceAlpha', 0.4, 'DisplayName', 'Portefeuille direct');
+xline(Nominal, '--', 'Seuil', 'Color', [0.75 0.34 0], 'LineWidth', 1.5);
+xlabel('Valeur finale ($)');
+ylabel('Fréquence');
+title('CD numérique vs portefeuille direct (1 000 $)');
+legend('Location', 'best');
+grid on;
+
+% --- CDF (fonction de répartition) ---
+figure;
+CDSorted = sort(CDValue);
+StSorted = sort(PortfolioValue);
+pct = (1:N) / N;
+plot(CDSorted, pct, '-', 'Color', [0 0.52 0.56], ...
+    'LineWidth', 2, 'DisplayName', 'CD numérique');
+hold on;
+plot(StSorted, pct, '--', 'Color', [0.18 0.20 0.21], ...
+    'LineWidth', 2, 'DisplayName', 'Portefeuille direct');
+xline(Nominal, ':', 'Color', [0.75 0.34 0]);
+yline(0.05, ':', 'VaR 5%', 'Color', [0.72 0.11 0.11]);
+xlabel('Valeur finale ($)');
+ylabel('Probabilité cumulative');
+title('Fonction de répartition : CD vs Actions');
+legend('Location', 'southeast');
+grid on;

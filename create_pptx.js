@@ -1,5 +1,107 @@
 const pptxgen = require("pptxgenjs");
+const fs = require("fs");
 const pres = new pptxgen();
+
+// ─── Run MC simulation for comparison chart data ───
+const DATA = JSON.parse(fs.readFileSync(__dirname + "/data.json", "utf8"));
+function runMC(nSim = 50000) {
+  const stocks = DATA.stocks;
+  const n = stocks.length;
+  const r = DATA.product.default_risk_free_rate;
+  const T = DATA.product.delta_t;
+  const sqrtT = Math.sqrt(T);
+  const S0 = stocks.map(s => s.s0_price);
+  const initP = stocks.map(s => s.initial_price_adj);
+  const sigma = stocks.map(s => s.annualized_vol);
+  const drift = sigma.map(s => (r - 0.5 * s * s) * T);
+  const diffusion = sigma.map(s => s * sqrtT);
+  const digital = DATA.product.digital_coupon;
+  const floor = DATA.product.floor;
+  const denom = DATA.product.denomination;
+
+  // Cholesky
+  const corr = DATA.correlation_matrix.matrix;
+  const L = Array.from({ length: n }, () => new Float64Array(n));
+  for (let i = 0; i < n; i++) {
+    for (let j = 0; j <= i; j++) {
+      let sum = 0;
+      for (let k = 0; k < j; k++) sum += L[i][k] * L[j][k];
+      L[i][j] = i === j ? Math.sqrt(corr[i][i] - sum) : (corr[i][j] - sum) / L[j][j];
+    }
+  }
+
+  // Box-Muller
+  let spare = null;
+  function randn() {
+    if (spare !== null) { const v = spare; spare = null; return v; }
+    let u, v, s2;
+    do { u = Math.random() * 2 - 1; v = Math.random() * 2 - 1; s2 = u * u + v * v; } while (s2 >= 1 || s2 === 0);
+    const mul = Math.sqrt(-2 * Math.log(s2) / s2);
+    spare = v * mul;
+    return u * mul;
+  }
+
+  const cdValues = new Float64Array(nSim);
+  const stockValues = new Float64Array(nSim);
+  const Z = new Float64Array(n);
+  const Zc = new Float64Array(n);
+
+  for (let sim = 0; sim < nSim; sim++) {
+    for (let i = 0; i < n; i++) Z[i] = randn();
+    for (let i = 0; i < n; i++) { let s = 0; for (let j = 0; j <= i; j++) s += L[i][j] * Z[j]; Zc[i] = s; }
+
+    let weightedPerf = 0, stockVal = 0;
+    for (let i = 0; i < n; i++) {
+      const ST = S0[i] * Math.exp(drift[i] + diffusion[i] * Zc[i]);
+      stockVal += (denom / n) * ST / S0[i];
+      const ret = (ST - initP[i]) / initP[i];
+      let perf;
+      if (ret > 0) perf = digital;
+      else if (ret > floor) perf = ret;
+      else perf = floor;
+      weightedPerf += perf / n;
+    }
+    const couponRate = Math.min(digital, Math.max(0, weightedPerf));
+    cdValues[sim] = denom + denom * couponRate;
+    stockValues[sim] = stockVal;
+  }
+
+  // Build histogram bins
+  const globalMin = Math.min(Math.min(...cdValues), Math.min(...stockValues));
+  const globalMax = Math.max(Math.max(...cdValues), Math.max(...stockValues));
+  const nBins = 30;
+  const binW = (globalMax - globalMin) / nBins;
+  const labels = [];
+  const cdHist = new Array(nBins).fill(0);
+  const stHist = new Array(nBins).fill(0);
+  for (let i = 0; i < nBins; i++) labels.push("$" + Math.round(globalMin + (i + 0.5) * binW));
+  for (let k = 0; k < nSim; k++) {
+    cdHist[Math.min(Math.floor((cdValues[k] - globalMin) / binW), nBins - 1)]++;
+    stHist[Math.min(Math.floor((stockValues[k] - globalMin) / binW), nBins - 1)]++;
+  }
+  // Relative frequency %
+  const cdFreq = cdHist.map(c => +(c / nSim * 100).toFixed(1));
+  const stFreq = stHist.map(c => +(c / nSim * 100).toFixed(1));
+
+  // Stats
+  const mean = arr => arr.reduce((a, b) => a + b, 0) / arr.length;
+  const std = arr => { const m = mean(arr); return Math.sqrt(arr.reduce((a, b) => a + (b - m) ** 2, 0) / arr.length); };
+  const sorted = arr => Float64Array.from(arr).sort();
+  const cdS = sorted(cdValues), stS = sorted(stockValues);
+  const pLoss = arr => arr.filter(v => v < denom).length / arr.length;
+
+  return {
+    labels, cdFreq, stFreq,
+    cdMean: mean(cdValues), stMean: mean(stockValues),
+    cdStd: std(cdValues), stStd: std(stockValues),
+    cdPLoss: pLoss(cdValues), stPLoss: pLoss(stockValues),
+    cdVar5: cdS[Math.floor(0.05 * nSim)], stVar5: stS[Math.floor(0.05 * nSim)],
+    cdBest: cdS[nSim - 1], stBest: stS[nSim - 1],
+    cdWorst: cdS[0], stWorst: stS[0],
+  };
+}
+const mc = runMC();
+console.log(`MC: CD mean=$${mc.cdMean.toFixed(2)}, Stocks mean=$${mc.stMean.toFixed(2)}, P(loss stocks)=${(mc.stPLoss*100).toFixed(1)}%`);
 
 // ─── Presentation metadata ───
 pres.layout = "LAYOUT_16x9";
@@ -1294,7 +1396,113 @@ const stocks = [
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// SLIDE 15b — Limites et Questions
+// SLIDE 15b — CD numérique vs portefeuille direct
+// ═══════════════════════════════════════════════════════════════════════════
+{
+  const s = pres.addSlide();
+  s.background = { color: C.cream };
+  addIcon(s, "scales");
+
+  s.addText([
+    { text: "  ", options: { fontFace: F.mono, color: C.teal, bold: true } },
+    { text: "CD num\u00e9rique vs portefeuille direct", options: { fontFace: F.serif, color: C.charcoal } },
+  ], { x: 0.8, y: 0.4, w: 8.4, h: 0.7, fontSize: 22, margin: 0 });
+  s.addShape(pres.shapes.LINE, { x: 0.8, y: 1.05, w: 8.4, h: 0, line: { color: C.borderLt, width: 1 } });
+  s.addText("M\u00eame investissement de 1 000 $, m\u00eame horizon (oct. 2016 \u2192 sept. 2017), m\u00eames 10 titres. Simulation : 50 000 sc\u00e9narios.", {
+    x: 0.8, y: 1.15, w: 8.4, h: 0.3, fontFace: F.sans, fontSize: 10, color: C.warmGray, margin: 0,
+  });
+
+  // Left: metrics table
+  const fmtPct = v => (v * 100).toFixed(1) + "%";
+  const fmtDol = v => "$" + v.toFixed(0);
+  const tableW = 4.6, yTable = 1.55;
+
+  s.addShape(pres.shapes.RECTANGLE, {
+    x: 0.4, y: yTable, w: tableW, h: 3.5,
+    fill: { color: C.white }, shadow: makeShadow(), rectRadius: 0.05,
+  });
+
+  // Table header
+  const hdrY = yTable + 0.05, hdrH = 0.35;
+  s.addText("M\u00e9trique", { x: 0.55, y: hdrY, w: 1.6, h: hdrH, fontFace: F.sans, fontSize: 9, color: C.warmGray, bold: true, margin: 0 });
+  s.addText("Actions", { x: 2.25, y: hdrY, w: 1.2, h: hdrH, fontFace: F.sans, fontSize: 9, color: C.charcoal, bold: true, align: "center", margin: 0 });
+  s.addText("CD", { x: 3.55, y: hdrY, w: 1.2, h: hdrH, fontFace: F.sans, fontSize: 9, color: C.teal, bold: true, align: "center", margin: 0 });
+  s.addShape(pres.shapes.LINE, { x: 0.55, y: hdrY + hdrH, w: tableW - 0.3, h: 0, line: { color: C.borderLt, width: 0.5 } });
+
+  const metricRows = [
+    ["E[valeur finale]", fmtDol(mc.stMean), fmtDol(mc.cdMean)],
+    ["E[rendement]", fmtPct((mc.stMean - 1000) / 1000), fmtPct((mc.cdMean - 1000) / 1000)],
+    ["Volatilit\u00e9 (\u03c3)", fmtDol(mc.stStd), fmtDol(mc.cdStd)],
+    ["P(perte)", fmtPct(mc.stPLoss), fmtPct(mc.cdPLoss)],
+    ["VaR 5%", fmtDol(mc.stVar5), fmtDol(mc.cdVar5)],
+    ["Pire sc\u00e9nario", fmtDol(mc.stWorst), fmtDol(mc.cdWorst)],
+    ["Meilleur sc\u00e9nario", fmtDol(mc.stBest), fmtDol(mc.cdBest)],
+  ];
+  metricRows.forEach((row, i) => {
+    const yRow = hdrY + hdrH + 0.08 + i * 0.4;
+    s.addText(row[0], { x: 0.55, y: yRow, w: 1.6, h: 0.35, fontFace: F.sans, fontSize: 9, color: C.charcoal, margin: 0 });
+    s.addText(row[1], { x: 2.25, y: yRow, w: 1.2, h: 0.35, fontFace: F.mono, fontSize: 9, color: C.charcoal, align: "center", margin: 0 });
+    s.addText(row[2], { x: 3.55, y: yRow, w: 1.2, h: 0.35, fontFace: F.mono, fontSize: 9, color: C.teal, align: "center", margin: 0 });
+  });
+
+  // Right: histogram overlay
+  s.addShape(pres.shapes.RECTANGLE, {
+    x: 5.1, y: yTable, w: 4.5, h: 3.5,
+    fill: { color: C.white }, shadow: makeShadow(), rectRadius: 0.05,
+  });
+  s.addText("Distribution des valeurs finales", {
+    x: 5.3, y: yTable + 0.08, w: 4.1, h: 0.3,
+    fontFace: F.serif, fontSize: 12, color: C.charcoal, margin: 0,
+  });
+
+  s.addChart(pres.charts.BAR, [
+    { name: "CD num\u00e9rique", labels: mc.labels, values: mc.cdFreq },
+    { name: "Portefeuille direct", labels: mc.labels, values: mc.stFreq },
+  ], {
+    x: 5.2, y: yTable + 0.45, w: 4.3, h: 2.75,
+    barDir: "col",
+    barGrouping: "clustered",
+    chartColors: [C.teal, C.charcoal],
+    showLegend: true, legendPos: "b", legendFontSize: 7, legendColor: C.warmGray,
+    showValue: false,
+    catGridLine: { style: "none" },
+    valGridLine: { color: C.borderLt, size: 0.5 },
+    catAxisLabelColor: C.warmGray, valAxisLabelColor: C.warmGray,
+    catAxisLabelFontSize: 6, valAxisLabelFontSize: 7,
+    catAxisLabelRotate: 45,
+    valAxisTitle: "Fr\u00e9quence (%)", valAxisTitleColor: C.warmGray, valAxisTitleFontSize: 8,
+  });
+
+  // Bottom takeaway
+  const yTakeaway = yTable + 3.65;
+  s.addShape(pres.shapes.RECTANGLE, {
+    x: 0.8, y: yTakeaway, w: 8.4, h: 0.4,
+    fill: { color: "FDF5EF" }, line: { color: C.orange, width: 0.5 },
+    rectRadius: 0.05,
+  });
+  s.addText("Le CD sacrifie le potentiel de hausse illimit\u00e9 pour \u00e9liminer compl\u00e8tement le risque de perte en capital.", {
+    x: 1.0, y: yTakeaway, w: 8.0, h: 0.4,
+    fontFace: F.serif, fontSize: 11, color: C.orange, italic: true, align: "center", valign: "middle", margin: 0,
+  });
+
+  s.addNotes(
+    "Cette diapositive compare directement le CD num\u00e9rique \u00e0 l'achat des 10 titres sous-jacents.\n\n" +
+    "DEUX PERSPECTIVES \u00e0 mentionner :\n\n" +
+    "1. Valeur nominale (1 000 $) : on compare le m\u00e9canisme du produit. Le CD offre " +
+    ((mc.cdMean - 1000) / 10).toFixed(1) + "% de rendement moyen avec z\u00e9ro risque de perte. " +
+    "Le portefeuille direct offre " + ((mc.stMean - 1000) / 10).toFixed(1) + "% mais avec " +
+    (mc.stPLoss * 100).toFixed(0) + "% de probabilit\u00e9 de perte.\n\n" +
+    "2. D\u00e9cision d'achat (au prix du CD ~1 036 $) : sous le pricing risque-neutre, le rendement esp\u00e9r\u00e9 " +
+    "du CD \u2248 r (taux sans risque). Il n'y a pas de \u00ab free lunch \u00bb \u2014 le march\u00e9 price exactement " +
+    "la protection du capital. L'int\u00e9r\u00eat du CD n'est pas dans le rendement moyen, mais dans le profil de risque.\n\n" +
+    "POINT CL\u00c9 : Le CD transforme le profil rendement/risque. On \u00e9change un potentiel illimit\u00e9 " +
+    "(mais risqu\u00e9) contre un rendement plafonn\u00e9 mais s\u00e9curis\u00e9. C'est le principe fondamental " +
+    "de la structuration financi\u00e8re."
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SLIDE 16 — Limites et Questions
 // ═══════════════════════════════════════════════════════════════════════════
 {
   const s = pres.addSlide();

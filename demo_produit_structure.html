@@ -309,6 +309,21 @@ tr:hover { background: var(--teal-light); }
 .collapsible-toggle.open::before { transform: rotate(45deg); }
 .collapsible-content { display: none; }
 .collapsible-content.open { display: block; }
+/* Comparison: CD vs Stocks */
+.comp-toggle { display: inline-block; padding: 6px 14px; border: 1px solid var(--border); background: none;
+  cursor: pointer; font-size: 12px; font-family: var(--font-sans); color: var(--text-secondary); transition: all 0.15s; }
+.comp-toggle:first-child { border-radius: 3px 0 0 3px; }
+.comp-toggle:last-child { border-radius: 0 3px 3px 0; border-left: none; }
+.comp-toggle.active { background: var(--teal); color: white; border-color: var(--teal); }
+.comp-grid { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid var(--border-light); border-radius: 3px; }
+.comp-header { padding: 10px 16px; text-align: center; font-family: var(--font-sans); font-size: 11px;
+  font-weight: 600; text-transform: uppercase; letter-spacing: 1px; }
+.comp-cell { padding: 10px 16px; border-top: 1px solid var(--border-light); }
+.comp-cell .label { font-size: 10px; color: var(--text-tertiary); text-transform: uppercase;
+  letter-spacing: 0.8px; font-weight: 600; }
+.comp-cell .value { font-family: var(--font-mono); font-size: 16px; margin-top: 2px; }
+.comp-cell .value.green { color: var(--green); }
+.comp-cell .value.red { color: var(--red); }
 /* Validation */
 .input-error { border-color: var(--red) !important; background: var(--red-bg) !important; }
 .validation-msg { font-size: 11px; color: var(--red); margin-top: 4px; display: none; }
@@ -938,6 +953,21 @@ grid on;</code></pre>
         <table class="matrix-table" id="sim1-st-table"></table>
       </div>
     </div>
+
+    <div class="card" style="margin-top:20px;">
+      <h2>Comparaison : CD num&#233;rique vs portefeuille direct</h2>
+      <p style="font-size:13px;color:var(--text-secondary);margin-bottom:12px;">
+        M&#234;me simulation Monte Carlo, deux strat&#233;gies : le CD structur&#233; (capital prot&#233;g&#233;, coupon plafonn&#233;) vs l&#8217;achat direct des 10 titres (plein potentiel, plein risque).
+      </p>
+      <div style="margin-bottom:16px;">
+        <button class="comp-toggle active" onclick="switchCompPerspective('nominal')">Valeur nominale (1 000 $)</button><button class="comp-toggle" onclick="switchCompPerspective('decision')">D&#233;cision d&#8217;achat (<span id="comp-cdprice-label"></span>)</button>
+      </div>
+      <div class="comp-grid" id="comp-metrics"></div>
+      <h3 style="margin-top:24px;">Distribution des valeurs finales</h3>
+      <canvas id="comp-histogram" height="280"></canvas>
+      <h3 style="margin-top:24px;">Fonction de r&#233;partition cumulative (CDF)</h3>
+      <canvas id="comp-cdf" height="250"></canvas>
+    </div>
   </div>
 </div>
 
@@ -1428,6 +1458,8 @@ function buildHeatmap() {
 // SECTION 7: TAB 3 – MONTE CARLO
 // ═══════════════════════════════════════
 let mcHistChart = null, mcConvChart = null, mcEndChart = null;
+let compHistChart = null, compCdfChart = null;
+let compData = null, compPerspective = 'nominal';
 let mcResults = null;
 
 function initTab3() {
@@ -1711,6 +1743,8 @@ function mc_displayResults() {
   mc_drawEndpoints();
   // Sim 1 detail tables
   mc_drawSim1Detail();
+  // Comparison: CD vs direct stocks
+  mc_drawComparison();
 }
 
 function mc_drawHistogram() {
@@ -1854,6 +1888,242 @@ function mc_drawEndpoints() {
       scales: {
         x: { title: { display: true, text: ticker + ' – Prix terminal S_T ($)' }, ticks: { maxRotation: 45, autoSkip: true, maxTicksLimit: 12 } },
         y: { title: { display: true, text: 'Fréquence' } }
+      }
+    }
+  });
+}
+
+// ═══════════════════════════════════════
+// COMPARISON: CD vs Direct Stock Ownership
+// All data is trusted internal computation (no user input).
+// ═══════════════════════════════════════
+
+function mc_computeComparison() {
+  const res = mcResults;
+  const N = res.nSim;
+  const stocks = DATA.stocks;
+  const n = stocks.length;
+  const S0 = stocks.map(s => s.s0_price);
+  const cdPrice = res.cdPrice;
+  const denom = DATA.product.denomination;
+
+  // Perspective A: nominal ($1,000 each)
+  const cdValNom = new Float64Array(N);
+  const stockValNom = new Float64Array(N);
+  // Perspective B: decision (cdPrice each)
+  const cdValDec = new Float64Array(N);
+  const stockValDec = new Float64Array(N);
+
+  const allocNom = denom / n;       // $100 per stock
+  const allocDec = cdPrice / n;     // cdPrice/10 per stock
+
+  for (let k = 0; k < N; k++) {
+    const cdPayout = denom + res.couponPayments[k];
+    cdValNom[k] = cdPayout;
+    cdValDec[k] = cdPayout;
+
+    let sumNom = 0, sumDec = 0;
+    for (let i = 0; i < n; i++) {
+      const ratio = res.allEndpoints[i][k] / S0[i];
+      sumNom += allocNom * ratio;
+      sumDec += allocDec * ratio;
+    }
+    stockValNom[k] = sumNom;
+    stockValDec[k] = sumDec;
+  }
+
+  function computeStats(values, investment) {
+    const sorted = Float64Array.from(values).sort();
+    const N2 = sorted.length;
+    let sum = 0, sumSq = 0;
+    let pLoss = 0;
+    for (let i = 0; i < N2; i++) {
+      sum += sorted[i];
+      sumSq += sorted[i] * sorted[i];
+      if (sorted[i] < investment) pLoss++;
+    }
+    const mean = sum / N2;
+    const variance = sumSq / N2 - mean * mean;
+    const std = Math.sqrt(Math.max(0, variance));
+    const retMean = (mean - investment) / investment;
+    const retStd = std / investment;
+    const var5idx = Math.floor(0.05 * N2);
+    const var5 = sorted[var5idx];
+    // CVaR: mean of worst 5%
+    let cvarSum = 0;
+    for (let i = 0; i <= var5idx; i++) cvarSum += sorted[i];
+    const cvar5 = cvarSum / (var5idx + 1);
+    const median = sorted[Math.floor(N2 / 2)];
+    const worst = sorted[0];
+    const best = sorted[N2 - 1];
+    const sharpe = retStd > 0 ? retMean / retStd : Infinity;
+    return { mean, std, median, retMean, retStd, pLoss: pLoss / N2, var5, cvar5, worst, best, sharpe, sorted };
+  }
+
+  compData = {
+    nominal: {
+      investment: denom,
+      cd: computeStats(cdValNom, denom),
+      stocks: computeStats(stockValNom, denom),
+    },
+    decision: {
+      investment: cdPrice,
+      cd: computeStats(cdValDec, cdPrice),
+      stocks: computeStats(stockValDec, cdPrice),
+    },
+  };
+}
+
+function switchCompPerspective(p) {
+  compPerspective = p;
+  document.querySelectorAll('.comp-toggle').forEach((b, i) => {
+    b.classList.toggle('active', (i === 0 && p === 'nominal') || (i === 1 && p === 'decision'));
+  });
+  mc_drawCompMetrics();
+  mc_drawCompHistogram();
+  mc_drawCompCdf();
+}
+
+function mc_drawComparison() {
+  mc_computeComparison();
+  document.getElementById('comp-cdprice-label').textContent = fmtMoney(mcResults.cdPrice);
+  mc_drawCompMetrics();
+  mc_drawCompHistogram();
+  mc_drawCompCdf();
+}
+
+function mc_drawCompMetrics() {
+  const d = compData[compPerspective];
+  const inv = d.investment;
+  const rows = [
+    ['Investissement', fmtMoney(inv), fmtMoney(inv), '', ''],
+    ['Valeur finale esp\u00e9r\u00e9e', fmtMoney(d.cd.mean), fmtMoney(d.stocks.mean), '', ''],
+    ['Rendement esp\u00e9r\u00e9', fmtPct(d.cd.retMean), fmtPct(d.stocks.retMean),
+      d.cd.retMean >= d.stocks.retMean ? 'green' : '', d.stocks.retMean >= d.cd.retMean ? 'green' : ''],
+    ['Volatilit\u00e9 (\u03c3)', fmtPct(d.cd.retStd), fmtPct(d.stocks.retStd),
+      d.cd.retStd <= d.stocks.retStd ? 'green' : 'red', d.stocks.retStd <= d.cd.retStd ? 'green' : 'red'],
+    ['P(perte)', fmtPct(d.cd.pLoss), fmtPct(d.stocks.pLoss),
+      d.cd.pLoss <= d.stocks.pLoss ? 'green' : 'red', d.stocks.pLoss <= d.cd.pLoss ? 'green' : 'red'],
+    ['VaR 5%', fmtMoney(d.cd.var5), fmtMoney(d.stocks.var5),
+      d.cd.var5 >= d.stocks.var5 ? 'green' : 'red', d.stocks.var5 >= d.cd.var5 ? 'green' : 'red'],
+    ['CVaR 5%', fmtMoney(d.cd.cvar5), fmtMoney(d.stocks.cvar5),
+      d.cd.cvar5 >= d.stocks.cvar5 ? 'green' : 'red', d.stocks.cvar5 >= d.cd.cvar5 ? 'green' : 'red'],
+    ['Pire sc\u00e9nario', fmtMoney(d.cd.worst), fmtMoney(d.stocks.worst),
+      d.cd.worst >= d.stocks.worst ? 'green' : 'red', d.stocks.worst >= d.cd.worst ? 'green' : 'red'],
+    ['Meilleur sc\u00e9nario', fmtMoney(d.cd.best), fmtMoney(d.stocks.best),
+      d.cd.best >= d.stocks.best ? 'green' : '', d.stocks.best >= d.cd.best ? 'green' : ''],
+    ['Ratio rendement/risque', d.cd.sharpe === Infinity ? '\u221e' : d.cd.sharpe.toFixed(2),
+      d.stocks.sharpe.toFixed(2),
+      d.cd.sharpe >= d.stocks.sharpe ? 'green' : '', d.stocks.sharpe >= d.cd.sharpe ? 'green' : ''],
+  ];
+
+  // Build table — trusted numeric data only
+  let h = '<div class="comp-header" style="background:var(--teal);color:white;">CD num\u00e9rique</div>' +
+          '<div class="comp-header" style="background:var(--charcoal);color:white;">Portefeuille direct</div>';
+  for (const [label, cdVal, stVal, cdColor, stColor] of rows) {
+    h += '<div class="comp-cell"><div class="label">' + label + '</div><div class="value ' + cdColor + '">' + cdVal + '</div></div>';
+    h += '<div class="comp-cell"><div class="label">' + label + '</div><div class="value ' + stColor + '">' + stVal + '</div></div>';
+  }
+  document.getElementById('comp-metrics').innerHTML = h; // trusted numeric data
+}
+
+function mc_drawCompHistogram() {
+  const d = compData[compPerspective];
+  const cdSorted = d.cd.sorted;
+  const stSorted = d.stocks.sorted;
+  const N = cdSorted.length;
+
+  // Global range
+  const globalMin = Math.min(cdSorted[0], stSorted[0]);
+  const globalMax = Math.max(cdSorted[N - 1], stSorted[N - 1]);
+  const nBins = 50;
+  const binW = (globalMax - globalMin) / nBins;
+  const labels = [];
+  const cdCounts = new Array(nBins).fill(0);
+  const stCounts = new Array(nBins).fill(0);
+
+  for (let i = 0; i < nBins; i++) labels.push('$' + (globalMin + (i + 0.5) * binW).toFixed(0));
+  for (let k = 0; k < N; k++) {
+    const ci = Math.min(Math.floor((cdSorted[k] - globalMin) / binW), nBins - 1);
+    const si = Math.min(Math.floor((stSorted[k] - globalMin) / binW), nBins - 1);
+    cdCounts[ci]++;
+    stCounts[si]++;
+  }
+  // Convert to relative frequency %
+  const cdFreq = cdCounts.map(c => c / N * 100);
+  const stFreq = stCounts.map(c => c / N * 100);
+
+  // Breakeven bin index
+  const breakEvenBin = Math.floor((d.investment - globalMin) / binW);
+
+  if (compHistChart) compHistChart.destroy();
+  compHistChart = new Chart(document.getElementById('comp-histogram'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        { label: 'CD num\u00e9rique', data: cdFreq, backgroundColor: 'rgba(0,131,143,0.55)', borderColor: 'rgba(0,131,143,1)', borderWidth: 1, barPercentage: 1, categoryPercentage: 1 },
+        { label: 'Portefeuille direct', data: stFreq, backgroundColor: 'rgba(45,52,54,0.35)', borderColor: 'rgba(45,52,54,0.8)', borderWidth: 1, barPercentage: 1, categoryPercentage: 1 },
+      ]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { position: 'top' },
+        annotation: { annotations: {
+          breakeven: { type: 'line', xMin: breakEvenBin, xMax: breakEvenBin, borderColor: 'rgba(191,86,0,0.7)', borderWidth: 2, borderDash: [6, 4],
+            label: { display: true, content: 'Seuil (' + fmtMoney(d.investment) + ')', position: 'start', backgroundColor: 'rgba(191,86,0,0.8)', font: { size: 10 } } }
+        }}
+      },
+      scales: {
+        x: { display: true, title: { display: true, text: 'Valeur finale ($)' }, ticks: { maxTicksLimit: 10, autoSkip: true, maxRotation: 45 }, grouped: false },
+        y: { title: { display: true, text: 'Fr\u00e9quence relative (%)' } }
+      }
+    }
+  });
+}
+
+function mc_drawCompCdf() {
+  const d = compData[compPerspective];
+  const cdS = d.cd.sorted;
+  const stS = d.stocks.sorted;
+  const N = cdS.length;
+
+  // Sample ~200 points for smooth CDF
+  const step = Math.max(1, Math.floor(N / 200));
+  const cdPts = [], stPts = [];
+  for (let i = 0; i < N; i += step) {
+    const pct = (i + 1) / N * 100;
+    cdPts.push({ x: cdS[i], y: pct });
+    stPts.push({ x: stS[i], y: pct });
+  }
+  // Ensure last point
+  cdPts.push({ x: cdS[N - 1], y: 100 });
+  stPts.push({ x: stS[N - 1], y: 100 });
+
+  if (compCdfChart) compCdfChart.destroy();
+  compCdfChart = new Chart(document.getElementById('comp-cdf'), {
+    type: 'scatter',
+    data: {
+      datasets: [
+        { label: 'CD num\u00e9rique', data: cdPts, showLine: true, pointRadius: 0, borderColor: 'rgba(0,131,143,1)', borderWidth: 2, fill: false },
+        { label: 'Portefeuille direct', data: stPts, showLine: true, pointRadius: 0, borderColor: 'rgba(45,52,54,0.8)', borderWidth: 2, borderDash: [4, 3], fill: false },
+      ]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { position: 'top' },
+        annotation: { annotations: {
+          var5: { type: 'line', yMin: 5, yMax: 5, borderColor: 'rgba(183,28,28,0.4)', borderWidth: 1, borderDash: [4, 4],
+            label: { display: true, content: 'VaR 5%', position: 'end', backgroundColor: 'rgba(183,28,28,0.6)', font: { size: 10 } } },
+          breakeven: { type: 'line', xMin: d.investment, xMax: d.investment, borderColor: 'rgba(191,86,0,0.5)', borderWidth: 1, borderDash: [4, 4],
+            label: { display: true, content: fmtMoney(d.investment), position: 'start', backgroundColor: 'rgba(191,86,0,0.7)', font: { size: 10 } } }
+        }}
+      },
+      scales: {
+        x: { type: 'linear', title: { display: true, text: 'Valeur finale ($)' } },
+        y: { title: { display: true, text: 'Probabilit\u00e9 cumulative (%)' }, min: 0, max: 100 }
       }
     }
   });

@@ -31,6 +31,14 @@ const F = { serif: "Georgia", sans: "Calibri", mono: "Consolas" };
 
 // ─── Reusable style factories ───
 const makeShadow = () => ({ type: "outer", blur: 4, offset: 1, angle: 135, color: "000000", opacity: 0.06 });
+const iconDir = __dirname + "/icons/";
+const addIcon = (s, name, opts = {}) => {
+  s.addImage({
+    path: iconDir + name + ".png",
+    x: opts.x ?? 9.0, y: opts.y ?? 0.25, w: opts.w ?? 0.45, h: opts.h ?? 0.45,
+    transparency: opts.transparency ?? 60,
+  });
+};
 
 // ─── Stock data ───
 const stocks = [
@@ -52,6 +60,7 @@ const stocks = [
 {
   const s = pres.addSlide();
   s.background = { color: C.cream };
+  addIcon(s, "certificate", { x: 8.6, y: 0.4, w: 0.7, h: 0.7, transparency: 50 });
 
   // Teal accent bar at top
   s.addShape(pres.shapes.RECTANGLE, { x: 0, y: 0, w: 10, h: 0.06, fill: { color: C.teal } });
@@ -95,6 +104,7 @@ const stocks = [
 {
   const s = pres.addSlide();
   s.background = { color: C.cream };
+  addIcon(s, "presentation-chart");
 
   s.addText("Agenda", {
     x: 0.8, y: 0.4, w: 8.4, h: 0.7,
@@ -140,6 +150,7 @@ const stocks = [
 {
   const s = pres.addSlide();
   s.background = { color: C.cream };
+  addIcon(s, "certificate");
 
   s.addText([
     { text: "1 ", options: { fontFace: F.mono, color: C.teal, bold: true } },
@@ -201,6 +212,7 @@ const stocks = [
 {
   const s = pres.addSlide();
   s.background = { color: C.cream };
+  addIcon(s, "briefcase");
 
   s.addText([
     { text: "1 ", options: { fontFace: F.mono, color: C.teal, bold: true } },
@@ -257,6 +269,7 @@ const stocks = [
 {
   const s = pres.addSlide();
   s.background = { color: C.cream };
+  addIcon(s, "tree-structure");
 
   s.addText([
     { text: "1 ", options: { fontFace: F.mono, color: C.teal, bold: true } },
@@ -351,6 +364,7 @@ const stocks = [
 {
   const s = pres.addSlide();
   s.background = { color: C.cream };
+  addIcon(s, "function");
 
   s.addText([
     { text: "1 ", options: { fontFace: F.mono, color: C.teal, bold: true } },
@@ -445,6 +459,7 @@ const stocks = [
 {
   const s = pres.addSlide();
   s.background = { color: C.cream };
+  addIcon(s, "chart-line-up");
 
   s.addText([
     { text: "2 ", options: { fontFace: F.mono, color: C.teal, bold: true } },
@@ -512,6 +527,7 @@ const stocks = [
 {
   const s = pres.addSlide();
   s.background = { color: C.cream };
+  addIcon(s, "grid-nine");
 
   s.addText([
     { text: "2 ", options: { fontFace: F.mono, color: C.teal, bold: true } },
@@ -639,6 +655,7 @@ const stocks = [
 {
   const s = pres.addSlide();
   s.background = { color: C.cream };
+  addIcon(s, "link");
 
   s.addText([
     { text: "2 ", options: { fontFace: F.mono, color: C.teal, bold: true } },
@@ -746,6 +763,7 @@ const stocks = [
 {
   const s = pres.addSlide();
   s.background = { color: C.cream };
+  addIcon(s, "code");
 
   s.addText([
     { text: "3 ", options: { fontFace: F.mono, color: C.teal, bold: true } },
@@ -816,6 +834,7 @@ const stocks = [
 {
   const s = pres.addSlide();
   s.background = { color: C.cream };
+  addIcon(s, "code");
 
   s.addText([
     { text: "3 ", options: { fontFace: F.mono, color: C.teal, bold: true } },
@@ -887,6 +906,7 @@ const stocks = [
 {
   const s = pres.addSlide();
   s.background = { color: C.cream };
+  addIcon(s, "flow-arrow");
 
   s.addText([
     { text: "3 ", options: { fontFace: F.mono, color: C.teal, bold: true } },
@@ -997,6 +1017,7 @@ const stocks = [
 {
   const s = pres.addSlide();
   s.background = { color: C.cream };
+  addIcon(s, "target");
 
   s.addText([
     { text: "4 ", options: { fontFace: F.mono, color: C.teal, bold: true } },
@@ -1077,6 +1098,7 @@ const stocks = [
 {
   const s = pres.addSlide();
   s.background = { color: C.cream };
+  addIcon(s, "chart-bar");
 
   s.addText([
     { text: "4 ", options: { fontFace: F.mono, color: C.teal, bold: true } },
@@ -1183,6 +1205,7 @@ const stocks = [
 {
   const s = pres.addSlide();
   s.background = { color: C.cream };
+  addIcon(s, "scales");
 
   s.addText([
     { text: "  ", options: { fontFace: F.mono, color: C.teal, bold: true } },
@@ -1276,6 +1299,7 @@ const stocks = [
 {
   const s = pres.addSlide();
   s.background = { color: C.cream };
+  addIcon(s, "warning");
 
   s.addText([
     { text: "  ", options: { fontFace: F.mono, color: C.teal, bold: true } },

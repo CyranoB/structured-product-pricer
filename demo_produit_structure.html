@@ -628,6 +628,19 @@ tr:hover { background: var(--teal-light); }
         <pre style="background:var(--charcoal);color:#e0e0e0;padding:12px 16px;border-radius:3px;font-family:var(--font-mono);font-size:12px;line-height:1.5;margin-top:12px;"><code>% Dans la console Matlab :
 >> evaluer_cd
 
+=== MATRICE L (FACTEUR DE CHOLESKY) ===
+         AAPL       C        F      HPQ    ...
+AAPL    1.0000       0        0        0   ...
+C       0.3429  0.9394        0        0   ...
+F       0.3367  0.5048  0.7945        0   ...
+...
+
+=== Z INDÉPENDANT - SIMULATION 1 ===
+         Z_indep_sim1
+AAPL        -0.4326
+C            1.6656
+...
+
 === RÉSULTAT ===
 Prix estimé du CD : 1036.49 $
 Coupon moyen      : 48.44 $
@@ -637,18 +650,18 @@ Simulations       : 10000</code></pre>
           Les deux fonctions (<code>simuler_gbm</code> et <code>calculer_payoff</code>) sont appelées automatiquement par le script principal. Elles peuvent aussi être utilisées séparément :
         </p>
         <pre style="background:var(--charcoal);color:#e0e0e0;padding:12px 16px;border-radius:3px;font-family:var(--font-mono);font-size:12px;line-height:1.5;margin-top:8px;"><code>% Appel direct des fonctions :
-S_final = simuler_gbm(S0, sigma, CorrMat, r, T, N);
+[S_final, L, Z_indep, Z_corr] = simuler_gbm(S0, sigma, CorrMat, r, T, N);
 [PrixCD, CouponMoyen, IC95, Payoffs] = calculer_payoff(S_final, S_init, 0.065, -0.30, 1000, r, T);</code></pre>
       </div>
       <div class="code-header">
         <h3>simuler_gbm.m <span style="font-weight:400;color:var(--text-secondary);font-size:12px;">— Simulation GBM avec Cholesky</span></h3>
         <button class="copy-btn" onclick="copyCode(this,'code-simuler')">Copier</button>
       </div>
-      <pre style="background:var(--charcoal);color:#e0e0e0;padding:20px;border-radius:3px;font-family:var(--font-mono);font-size:11px;line-height:1.6;overflow-x:auto;margin-top:8px;"><code id="code-simuler">function S_final = simuler_gbm(S0, sigma, CorrMat, r, T, N)
+      <pre style="background:var(--charcoal);color:#e0e0e0;padding:20px;border-radius:3px;font-family:var(--font-mono);font-size:11px;line-height:1.6;overflow-x:auto;margin-top:8px;"><code id="code-simuler">function [S_final, L, Z_indep, Z_corr] = simuler_gbm(S0, sigma, CorrMat, r, T, N)
 % SIMULER_GBM  Simule N prix terminaux pour un panier d'actions corrélées
 %   via le mouvement brownien géométrique sous la mesure risque-neutre.
 %
-%   S_final = simuler_gbm(S0, sigma, CorrMat, r, T, N)
+%   [S_final, L, Z_indep, Z_corr] = simuler_gbm(S0, sigma, CorrMat, r, T, N)
 %
 %   Entrées :
 %     S0      - vecteur [K x 1] des prix actuels (prix ajustés, date d'évaluation)
@@ -658,8 +671,11 @@ S_final = simuler_gbm(S0, sigma, CorrMat, r, T, N);
 %     T       - horizon de simulation en années (scalaire)
 %     N       - nombre de simulations Monte Carlo (scalaire)
 %
-%   Sortie :
+%   Sorties :
 %     S_final - matrice [K x N] des prix terminaux simulés
+%     L       - matrice [K x K] facteur de Cholesky (triangulaire inf.)
+%     Z_indep - matrice [K x N] normales indépendantes
+%     Z_corr  - matrice [K x N] normales corrélées (L * Z_indep)
 %
 %   Note : Les prix ajustés intègrent déjà les dividendes, donc la
 %   dérive risque-neutre est (r - sigma^2/2), sans terme q.
@@ -796,20 +812,32 @@ CorrMat = [
   0.2156 0.2176 0.3214 0.2874 0.4415 0.4048 0.4714 0.3065 0.3800 1.0000];
 
 %% 3. SIMULATION
-S_final = simuler_gbm(S0, sigma, CorrMat, r, T, N);
+[S_final, L, Z_indep, Z_corr] = simuler_gbm(S0, sigma, CorrMat, r, T, N);
 
-%% 4. ÉVALUATION
+%% 4. TABLEAUX : MATRICE DE CHOLESKY ET Z
+Table_L = array2table(L, 'VariableNames', Tickers, 'RowNames', Tickers);
+Table_Z_indep_1 = table(Z_indep(:,1), 'RowNames', Tickers, 'VariableNames', {'Z_indep_sim1'});
+Table_Z_corr_1  = table(Z_corr(:,1),  'RowNames', Tickers, 'VariableNames', {'Z_corr_sim1'});
+
+disp('=== MATRICE L (FACTEUR DE CHOLESKY) ===');
+disp(Table_L);
+disp('=== Z INDÉPENDANT - SIMULATION 1 ===');
+disp(Table_Z_indep_1);
+disp('=== Z CORRÉLÉ - SIMULATION 1 ===');
+disp(Table_Z_corr_1);
+
+%% 5. ÉVALUATION
 [PrixCD, CouponMoyen, IC95, Payoffs] = calculer_payoff( ...
     S_final, S_init, DigitalCoupon, Floor, Nominal, r, T);
 
-%% 5. RÉSULTATS
+%% 6. RÉSULTATS
 fprintf('\n=== RÉSULTAT ===\n');
 fprintf('Prix estimé du CD : %.2f $\n', PrixCD);
 fprintf('Coupon moyen      : %.2f $\n', CouponMoyen);
 fprintf('IC 95%%            : [%.2f, %.2f]\n', PrixCD - IC95, PrixCD + IC95);
 fprintf('Simulations       : %d\n', N);
 
-%% 6. GRAPHIQUES
+%% 7. GRAPHIQUES
 CouponPaiements = Payoffs - Nominal;
 
 % --- Histogramme ---
@@ -882,6 +910,33 @@ grid on;</code></pre>
         <select id="mc-stock-select" onchange="mc_drawEndpoints()" style="padding:6px 12px;border-radius:6px;border:1px solid var(--border);font-size:13px;"></select>
       </div>
       <canvas id="mc-endpoints" height="250"></canvas>
+    </div>
+
+    <div class="card" style="margin-top:20px;">
+      <button class="collapsible-toggle" id="sim1-toggle" onclick="toggleCollapsible('sim1')">
+        Détail de la simulation n°1 : L, Z, S<sub>T</sub>
+      </button>
+      <p style="font-size:12px;color:var(--text-secondary);margin-bottom:8px;">
+        Comme dans le code Matlab (<code>evaluer_cd.m</code>), on affiche la matrice de Cholesky L et les vecteurs Z de la première simulation pour vérification.
+      </p>
+      <div class="collapsible-content" id="sim1-content">
+        <h3 style="margin-top:16px;">Matrice L (facteur de Cholesky)</h3>
+        <div id="sim1-L-matrix"></div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:24px;">
+          <div>
+            <h3>Z indépendant (sim 1)</h3>
+            <table class="matrix-table" id="sim1-z-indep"></table>
+          </div>
+          <div>
+            <h3>Z corrélé = L × Z (sim 1)</h3>
+            <table class="matrix-table" id="sim1-z-corr"></table>
+          </div>
+        </div>
+
+        <h3 style="margin-top:24px;">Prix terminaux S<sub>T</sub> (sim 1)</h3>
+        <table class="matrix-table" id="sim1-st-table"></table>
+      </div>
     </div>
   </div>
 </div>
@@ -1539,6 +1594,7 @@ function mc_run() {
   // Hoisted arrays -- reused across iterations to avoid GC pressure
   const Z = new Float64Array(n);
   const Zcorr = new Float64Array(n);
+  let sim1_Z = null, sim1_Zcorr = null;
 
   function processBatch() {
     const batchEnd = Math.min(completed + batchSize, nSim);
@@ -1549,6 +1605,12 @@ function mc_run() {
         let sum = 0;
         for (let j = 0; j <= i; j++) sum += L[i][j] * Z[j];
         Zcorr[i] = sum;
+      }
+
+      // Save first simulation vectors for display
+      if (sim === 0) {
+        sim1_Z = Array.from(Z);
+        sim1_Zcorr = Array.from(Zcorr);
       }
 
       let weightedPerf = 0;
@@ -1601,6 +1663,8 @@ function mc_run() {
         couponPayments,
         allEndpoints,
         convergencePts,
+        L, sim1_Z, sim1_Zcorr,
+        sim1_ST: stocks.map((s, i) => allEndpoints[i][0]),
       };
 
       btn.disabled = false;
@@ -1645,6 +1709,8 @@ function mc_displayResults() {
   mc_drawConvergence();
   // Endpoints
   mc_drawEndpoints();
+  // Sim 1 detail tables
+  mc_drawSim1Detail();
 }
 
 function mc_drawHistogram() {
@@ -1791,6 +1857,51 @@ function mc_drawEndpoints() {
       }
     }
   });
+}
+
+// All data rendered by mc_drawSim1Detail is from trusted internal computation (no user input).
+function mc_drawSim1Detail() {
+  const res = mcResults;
+  const tickers = DATA.correlation_matrix.tickers;
+  const n = tickers.length;
+
+  // L matrix (reuse existing builder)
+  buildMatrixDisplay('sim1-L-matrix', res.L.map(row => Array.from(row)), tickers, true);
+
+  // Helper: build a single-column vector table (trusted numeric data only)
+  function buildVectorTable(elId, values, header) {
+    let h = '<thead><tr><th></th><th>'+header+'</th></tr></thead><tbody>';
+    for (let i = 0; i < n; i++) {
+      const v = values[i];
+      const color = Math.abs(v) > 1.96 ? 'var(--red)' : 'var(--charcoal)';
+      h += '<tr><th style="background:var(--charcoal);color:white;font-size:10px;">'+tickers[i]+'</th>';
+      h += '<td style="color:'+color+';font-family:var(--font-mono);">'+v.toFixed(4)+'</td></tr>';
+    }
+    document.getElementById(elId).innerHTML = h + '</tbody>'; // trusted numeric data
+  }
+
+  buildVectorTable('sim1-z-indep', res.sim1_Z, 'Z<sub>indep</sub>');
+  buildVectorTable('sim1-z-corr', res.sim1_Zcorr, 'Z<sub>corr</sub>');
+
+  // S_T table for sim 1: S0, ST, return, performance regime
+  const stocks = DATA.stocks;
+  let h = '<thead><tr><th></th><th>S<sub>0</sub></th><th>S<sub>T</sub></th><th>Rendement</th><th>Performance</th></tr></thead><tbody>';
+  for (let i = 0; i < n; i++) {
+    const sInit = stocks[i].initial_price_adj;
+    const st = res.sim1_ST[i];
+    const ret = (st - sInit) / sInit;
+    let perf, perfColor;
+    if (ret > 0) { perf = DATA.product.digital_coupon; perfColor = 'var(--green)'; }
+    else if (ret > DATA.product.floor) { perf = ret; perfColor = 'var(--orange)'; }
+    else { perf = DATA.product.floor; perfColor = 'var(--red)'; }
+    h += '<tr><th style="background:var(--charcoal);color:white;font-size:10px;">'+tickers[i]+'</th>';
+    h += '<td style="font-family:var(--font-mono);">'+stocks[i].s0_price.toFixed(2)+'</td>';
+    h += '<td style="font-family:var(--font-mono);">'+st.toFixed(2)+'</td>';
+    h += '<td style="font-family:var(--font-mono);color:'+(ret>0?'var(--green)':'var(--red)')+';">'+(ret*100).toFixed(2)+'%</td>';
+    h += '<td style="font-family:var(--font-mono);color:'+perfColor+';">'+(perf*100).toFixed(2)+'%</td>';
+    h += '</tr>';
+  }
+  document.getElementById('sim1-st-table').innerHTML = h + '</tbody>'; // trusted numeric data
 }
 
 // ═══════════════════════════════════════
